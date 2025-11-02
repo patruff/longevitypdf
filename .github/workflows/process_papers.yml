@@ -27,6 +27,7 @@ jobs:
     - name: Process papers
       env:
         XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
       run: |
         python process_papers.py
 

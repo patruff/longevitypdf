@@ -2,8 +2,9 @@
 """
 Longevity Paper Processing Script
 
-This script processes PDF papers in the papers/ folder to extract longevity-related
-statistics including longevity_increase_percent, model_organism, and intervention_used.
+This script processes PDF papers from Google Drive or the papers/ folder to extract
+longevity-related statistics including longevity_increase_percent, model_organism,
+and intervention_used.
 """
 
 import os
@@ -14,12 +15,14 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from openai import OpenAI
 import PyPDF2
+from google_drive_client import GoogleDriveClient
 
 # Configuration
-PAPERS_FOLDER = "papers"
+PAPERS_FOLDER = "papers"  # Fallback for local processing
 PROCESSED_FOLDER = "processed_papers"
 PROCESSED_TRACKER = "processed_papers/.processed_tracker.json"
 LOG_FILE = "processing.log"
+GOOGLE_DRIVE_FOLDER_NAME = "longevitypapers"  # Name of folder in Google Drive
 
 # Setup logging
 logging.basicConfig(
@@ -41,6 +44,15 @@ class PaperProcessor:
         self.processed_folder = Path(PROCESSED_FOLDER)
         self.tracker_file = Path(PROCESSED_TRACKER)
         self.processed_papers = self._load_tracker()
+
+        # Initialize Google Drive client
+        self.drive_client = GoogleDriveClient()
+        self.use_google_drive = self.drive_client.is_authenticated()
+
+        if self.use_google_drive:
+            logger.info("Using Google Drive as PDF source")
+        else:
+            logger.info("Google Drive not configured. Using local papers folder as fallback")
 
         # Initialize Grok client (xAI)
         api_key = os.getenv("XAI_API_KEY")
@@ -145,11 +157,25 @@ Return ONLY a JSON object with these three fields. If any information is not fou
 
     def _get_unprocessed_papers(self) -> List[Path]:
         """Get list of PDF files that haven't been processed yet."""
-        if not self.papers_folder.exists():
-            logger.warning(f"Papers folder {self.papers_folder} does not exist")
-            return []
+        all_pdfs = []
 
-        all_pdfs = list(self.papers_folder.glob("*.pdf"))
+        if self.use_google_drive:
+            # Fetch PDFs from Google Drive
+            logger.info(f"Fetching PDFs from Google Drive folder: {GOOGLE_DRIVE_FOLDER_NAME}")
+            all_pdfs = self.drive_client.download_all_pdfs_from_folder(GOOGLE_DRIVE_FOLDER_NAME)
+
+            if not all_pdfs:
+                logger.warning("No PDFs downloaded from Google Drive")
+                return []
+        else:
+            # Fallback to local papers folder
+            if not self.papers_folder.exists():
+                logger.warning(f"Papers folder {self.papers_folder} does not exist")
+                return []
+
+            all_pdfs = list(self.papers_folder.glob("*.pdf"))
+
+        # Filter out already processed papers
         unprocessed = [
             pdf for pdf in all_pdfs
             if pdf.name not in self.processed_papers["processed"]
@@ -201,7 +227,7 @@ Return ONLY a JSON object with these three fields. If any information is not fou
         return True
 
     def process_all(self):
-        """Process all unprocessed papers in the papers folder."""
+        """Process all unprocessed papers from Google Drive or local folder."""
         unprocessed = self._get_unprocessed_papers()
 
         if not unprocessed:
@@ -217,6 +243,15 @@ Return ONLY a JSON object with these three fields. If any information is not fou
 
         logger.info(f"Successfully processed {success_count}/{len(unprocessed)} papers")
 
+        # Cleanup temporary files if using Google Drive
+        if self.use_google_drive:
+            self.drive_client.cleanup_temp_files()
+
+    def cleanup(self):
+        """Clean up resources (temporary files, etc.)."""
+        if self.use_google_drive:
+            self.drive_client.cleanup_temp_files()
+
 
 def main():
     """Main entry point for the script."""
@@ -225,7 +260,12 @@ def main():
     logger.info("=" * 60)
 
     processor = PaperProcessor()
-    processor.process_all()
+
+    try:
+        processor.process_all()
+    finally:
+        # Ensure cleanup happens even if there's an error
+        processor.cleanup()
 
     logger.info("=" * 60)
     logger.info("Processing Complete")
