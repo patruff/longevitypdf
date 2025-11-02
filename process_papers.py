@@ -2,9 +2,10 @@
 """
 Longevity Paper Processing Script
 
-This script processes PDF papers from Google Drive or the papers/ folder to extract
+This script processes PDF papers from Google Drive folder 'longevitypapers' to extract
 longevity-related statistics including longevity_increase_percent, model_organism,
-and intervention_used.
+and intervention_used. Processed results are saved back to Google Drive in a
+'processed_papers' subfolder within 'longevitypapers'.
 """
 
 import os
@@ -18,11 +19,10 @@ import PyPDF2
 from google_drive_client import GoogleDriveClient
 
 # Configuration
-PAPERS_FOLDER = "papers"  # Fallback for local processing
-PROCESSED_FOLDER = "processed_papers"
-PROCESSED_TRACKER = "processed_papers/.processed_tracker.json"
 LOG_FILE = "processing.log"
 GOOGLE_DRIVE_FOLDER_NAME = "longevitypapers"  # Name of folder in Google Drive
+PROCESSED_SUBFOLDER_NAME = "processed_papers"  # Subfolder within longevitypapers
+TRACKER_FILE_NAME = ".processed_tracker.json"  # Tracker file name
 
 # Setup logging
 logging.basicConfig(
@@ -40,19 +40,32 @@ class PaperProcessor:
     """Processes scientific papers to extract longevity data."""
 
     def __init__(self):
-        self.papers_folder = Path(PAPERS_FOLDER)
-        self.processed_folder = Path(PROCESSED_FOLDER)
-        self.tracker_file = Path(PROCESSED_TRACKER)
-        self.processed_papers = self._load_tracker()
-
         # Initialize Google Drive client
         self.drive_client = GoogleDriveClient()
-        self.use_google_drive = self.drive_client.is_authenticated()
 
-        if self.use_google_drive:
-            logger.info("Using Google Drive as PDF source")
-        else:
-            logger.info("Google Drive not configured. Using local papers folder as fallback")
+        if not self.drive_client.is_authenticated():
+            raise ValueError("Google Drive authentication failed. Please set GOOGLE_DRIVE_CREDENTIALS environment variable.")
+
+        logger.info("Successfully authenticated with Google Drive")
+
+        # Find the main longevitypapers folder
+        self.main_folder_id = self.drive_client.find_folder(GOOGLE_DRIVE_FOLDER_NAME)
+        if not self.main_folder_id:
+            raise ValueError(f"Could not find '{GOOGLE_DRIVE_FOLDER_NAME}' folder in Google Drive")
+
+        # Find or create the processed_papers subfolder
+        self.processed_folder_id = self.drive_client.find_or_create_subfolder(
+            self.main_folder_id,
+            PROCESSED_SUBFOLDER_NAME
+        )
+
+        if not self.processed_folder_id:
+            raise ValueError(f"Could not create '{PROCESSED_SUBFOLDER_NAME}' subfolder")
+
+        logger.info(f"Using Google Drive folder '{GOOGLE_DRIVE_FOLDER_NAME}' for processing")
+
+        # Load tracker from Google Drive
+        self.processed_papers = self._load_tracker()
 
         # Initialize Grok client (xAI)
         api_key = os.getenv("XAI_API_KEY")
@@ -66,17 +79,51 @@ class PaperProcessor:
             )
 
     def _load_tracker(self) -> Dict:
-        """Load the tracker file that keeps record of processed papers."""
-        if self.tracker_file.exists():
-            with open(self.tracker_file, 'r') as f:
-                return json.load(f)
-        return {"processed": []}
+        """Load the tracker file from Google Drive."""
+        try:
+            content = self.drive_client.download_file_content(
+                self.processed_folder_id,
+                TRACKER_FILE_NAME
+            )
+
+            if content:
+                tracker_data = json.loads(content)
+                logger.info(f"Loaded tracker with {len(tracker_data.get('processed', []))} processed papers")
+                return tracker_data
+            else:
+                logger.info("No existing tracker file found, creating new one")
+                return {"processed": []}
+
+        except Exception as e:
+            logger.error(f"Error loading tracker: {e}")
+            return {"processed": []}
 
     def _save_tracker(self):
-        """Save the tracker file."""
-        self.processed_folder.mkdir(exist_ok=True)
-        with open(self.tracker_file, 'w') as f:
-            json.dump(self.processed_papers, f, indent=2)
+        """Save the tracker file to Google Drive."""
+        try:
+            tracker_json = json.dumps(self.processed_papers, indent=2)
+
+            # Check if tracker file already exists
+            existing_file_id = self.drive_client.file_exists_in_folder(
+                self.processed_folder_id,
+                TRACKER_FILE_NAME
+            )
+
+            if existing_file_id:
+                # Update existing file
+                self.drive_client.update_file_content(existing_file_id, tracker_json)
+                logger.info("Updated tracker file in Google Drive")
+            else:
+                # Create new file
+                self.drive_client.upload_json_content(
+                    tracker_json,
+                    self.processed_folder_id,
+                    TRACKER_FILE_NAME
+                )
+                logger.info("Created new tracker file in Google Drive")
+
+        except Exception as e:
+            logger.error(f"Error saving tracker: {e}")
 
     def _extract_text_from_pdf(self, pdf_path: Path) -> str:
         """Extract text content from a PDF file."""
@@ -156,24 +203,15 @@ Return ONLY a JSON object with these three fields. If any information is not fou
             return None
 
     def _get_unprocessed_papers(self) -> List[Path]:
-        """Get list of PDF files that haven't been processed yet."""
-        all_pdfs = []
+        """Get list of PDF files from Google Drive that haven't been processed yet."""
+        logger.info(f"Fetching PDFs from Google Drive folder: {GOOGLE_DRIVE_FOLDER_NAME}")
 
-        if self.use_google_drive:
-            # Fetch PDFs from Google Drive
-            logger.info(f"Fetching PDFs from Google Drive folder: {GOOGLE_DRIVE_FOLDER_NAME}")
-            all_pdfs = self.drive_client.download_all_pdfs_from_folder(GOOGLE_DRIVE_FOLDER_NAME)
+        # Download all PDFs from Google Drive
+        all_pdfs = self.drive_client.download_all_pdfs_from_folder(GOOGLE_DRIVE_FOLDER_NAME)
 
-            if not all_pdfs:
-                logger.warning("No PDFs downloaded from Google Drive")
-                return []
-        else:
-            # Fallback to local papers folder
-            if not self.papers_folder.exists():
-                logger.warning(f"Papers folder {self.papers_folder} does not exist")
-                return []
-
-            all_pdfs = list(self.papers_folder.glob("*.pdf"))
+        if not all_pdfs:
+            logger.warning("No PDFs found in Google Drive")
+            return []
 
         # Filter out already processed papers
         unprocessed = [
@@ -181,11 +219,12 @@ Return ONLY a JSON object with these three fields. If any information is not fou
             if pdf.name not in self.processed_papers["processed"]
         ]
 
+        logger.info(f"Found {len(unprocessed)} unprocessed papers out of {len(all_pdfs)} total")
         return unprocessed
 
     def process_paper(self, pdf_path: Path) -> bool:
         """
-        Process a single paper and save results.
+        Process a single paper and save results to Google Drive.
 
         Returns True if successful, False otherwise.
         """
@@ -211,14 +250,21 @@ Return ONLY a JSON object with these three fields. If any information is not fou
             "raw_text_preview": text[:1000] + "..." if len(text) > 1000 else text
         }
 
-        # Save to processed folder
+        # Save to Google Drive processed folder
         output_filename = pdf_path.stem + "_processed.json"
-        output_path = self.processed_folder / output_filename
+        output_json = json.dumps(output, indent=2)
 
-        with open(output_path, 'w') as f:
-            json.dump(output, f, indent=2)
+        file_id = self.drive_client.upload_json_content(
+            output_json,
+            self.processed_folder_id,
+            output_filename
+        )
 
-        logger.info(f"Saved processed data to {output_path}")
+        if not file_id:
+            logger.error(f"Failed to upload processed data for {pdf_path.name} to Google Drive")
+            return False
+
+        logger.info(f"Saved processed data to Google Drive: {output_filename}")
 
         # Update tracker
         self.processed_papers["processed"].append(pdf_path.name)
@@ -227,7 +273,7 @@ Return ONLY a JSON object with these three fields. If any information is not fou
         return True
 
     def process_all(self):
-        """Process all unprocessed papers from Google Drive or local folder."""
+        """Process all unprocessed papers from Google Drive."""
         unprocessed = self._get_unprocessed_papers()
 
         if not unprocessed:
@@ -243,14 +289,12 @@ Return ONLY a JSON object with these three fields. If any information is not fou
 
         logger.info(f"Successfully processed {success_count}/{len(unprocessed)} papers")
 
-        # Cleanup temporary files if using Google Drive
-        if self.use_google_drive:
-            self.drive_client.cleanup_temp_files()
+        # Cleanup temporary downloaded files
+        self.drive_client.cleanup_temp_files()
 
     def cleanup(self):
         """Clean up resources (temporary files, etc.)."""
-        if self.use_google_drive:
-            self.drive_client.cleanup_temp_files()
+        self.drive_client.cleanup_temp_files()
 
 
 def main():

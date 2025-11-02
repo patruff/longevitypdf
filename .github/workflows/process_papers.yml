@@ -1,10 +1,9 @@
 name: Process Longevity Papers
 
 on:
-  push:
-    paths:
-      - 'papers/kickoff.txt'
   workflow_dispatch:  # Allow manual triggering
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours to check for new PDFs
 
 jobs:
   process-papers:
@@ -27,17 +26,16 @@ jobs:
     - name: Process papers
       env:
         XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
       run: |
         python process_papers.py
 
-    - name: Commit processed papers
+    - name: Commit processing log
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add processed_papers/
         git add processing.log
-        git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Process longevity papers [automated]"
+        git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Update processing log [automated]"
 
     - name: Push changes
       uses: ad-m/github-push-action@master

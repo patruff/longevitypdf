@@ -1,72 +1,75 @@
 # Longevity PDF Processor
 
-Automated system for processing scientific papers about longevity and extracting key statistics.
+Automated system for processing scientific papers about longevity from Google Drive and extracting key statistics using AI.
 
 ## Overview
 
-This repository automatically processes PDF papers about longevity research and extracts:
+This repository automatically processes PDF papers about longevity research stored in Google Drive and extracts:
 - **longevity_increase_percent**: Percentage increase in lifespan
-- **model_organism**: The organism studied (e.g., C. elegans, mice, rats)
-- **intervention_used**: The treatment or intervention applied
+- **model_organism**: The organism studied (e.g., C. elegans, mice, rats, humans)
+- **intervention_used**: The treatment or intervention applied (e.g., rapamycin, caloric restriction)
+
+All PDFs are sourced from Google Drive, and processed results are saved back to Google Drive in a `processed_papers` subfolder.
 
 ## How It Works
 
-1. **Add Papers**: Upload PDF files to Google Drive folder `longevitypapers` (or use local `papers/` folder)
-2. **Trigger Processing**: Edit `papers/kickoff.txt` and commit the change (or run manually)
-3. **Automated Processing**: GitHub Action fetches PDFs from Google Drive and runs the processing script
-4. **View Results**: Check the `processed_papers/` folder for JSON output
-
-## PDF Source Options
-
-This system supports two methods for providing PDFs:
-
-1. **Google Drive (Recommended)**: PDFs are automatically fetched from a Google Drive folder named `longevitypapers`
-2. **Local Folder (Fallback)**: If Google Drive is not configured, PDFs can be placed in the local `papers/` folder
+1. **Upload Papers**: Add PDF files to your `longevitypapers` folder in Google Drive
+2. **Automated Processing**: GitHub Action runs every 6 hours (or manually triggered) to check for new PDFs
+3. **AI Extraction**: Grok AI extracts longevity statistics from each paper
+4. **Results Stored**: Processed results saved to `longevitypapers/processed_papers/` folder in Google Drive
+5. **Tracking**: System tracks which papers have been processed to avoid duplicates
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- xAI API key (Grok)
-- Google Cloud Service Account (for Google Drive integration)
+- xAI API key (for Grok AI)
+- Google Cloud Service Account with Google Drive API access
 
 ### Google Drive Setup
 
-To enable Google Drive integration:
+#### 1. Create a Google Cloud Project
 
-1. **Create a Google Cloud Project**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select an existing one
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Create a new project or select an existing one
 
-2. **Enable Google Drive API**:
-   - Navigate to "APIs & Services" > "Library"
-   - Search for "Google Drive API"
-   - Click "Enable"
+#### 2. Enable Google Drive API
 
-3. **Create a Service Account**:
-   - Go to "APIs & Services" > "Credentials"
-   - Click "Create Credentials" > "Service Account"
-   - Fill in the service account details and create
+- Navigate to "APIs & Services" > "Library"
+- Search for "Google Drive API"
+- Click "Enable"
 
-4. **Generate JSON Key**:
-   - Click on the created service account
-   - Go to "Keys" tab
-   - Click "Add Key" > "Create new key"
-   - Choose JSON format and download the file
+#### 3. Create a Service Account
 
-5. **Share Google Drive Folder**:
-   - Create a folder named `longevitypapers` in your Google Drive
-   - Right-click the folder and click "Share"
-   - Share it with the service account email (found in the JSON file as `client_email`)
-   - Give it "Viewer" or "Editor" permissions
+- Go to "APIs & Services" > "Credentials"
+- Click "Create Credentials" > "Service Account"
+- Fill in the service account details and create
 
-6. **Add to GitHub Secrets**:
-   - Go to Settings > Secrets and variables > Actions
-   - Add a new secret named `GOOGLE_CREDENTIALS`
-   - Paste the entire contents of the JSON file as the value
+#### 4. Generate JSON Key
 
-### Local Setup
+- Click on the created service account
+- Go to "Keys" tab
+- Click "Add Key" > "Create new key"
+- Choose JSON format and download the file
+
+#### 5. Create and Share Google Drive Folder
+
+- Create a folder named `longevitypapers` in your Google Drive (must be this exact name)
+- Right-click the folder and click "Share"
+- Share it with the service account email (found in the JSON file as `client_email`)
+- Give it **"Editor"** permissions (required for creating the `processed_papers` subfolder)
+
+#### 6. Add GitHub Secrets
+
+- Go to your repo Settings > Secrets and variables > Actions
+- Add a new secret named `GOOGLE_DRIVE_CREDENTIALS`
+- Paste the entire contents of the JSON key file as the value
+- Add another secret named `XAI_API_KEY` with your xAI API key (get from https://console.x.ai/)
+
+### Local Setup (Optional)
+
+To run the processor locally:
 
 1. Install dependencies:
 ```bash
@@ -76,7 +79,7 @@ pip install -r requirements.txt
 2. Set your environment variables:
 ```bash
 export XAI_API_KEY="your-xai-api-key-here"
-export GOOGLE_CREDENTIALS='{"type": "service_account", "project_id": "...", ...}'
+export GOOGLE_DRIVE_CREDENTIALS='{"type": "service_account", "project_id": "...", ...}'
 ```
 
 3. Run the processor:
@@ -84,114 +87,119 @@ export GOOGLE_CREDENTIALS='{"type": "service_account", "project_id": "...", ...}
 python process_papers.py
 ```
 
-### GitHub Actions Setup
-
-1. Add your secrets to GitHub:
-   - Go to Settings > Secrets and variables > Actions
-   - Add `XAI_API_KEY` (get from https://console.x.ai/)
-   - Add `GOOGLE_CREDENTIALS` (entire JSON from service account)
-
-2. The workflow will automatically trigger when you:
-   - Edit and commit `papers/kickoff.txt`
-   - Manually trigger via Actions tab
-
-3. PDFs will be automatically fetched from your Google Drive `longevitypapers` folder
-
 ## Project Structure
 
 ```
 longevitypdf/
-├── papers/                      # Fallback: Place PDF papers here if not using Google Drive
-│   └── kickoff.txt             # Edit this to trigger processing
-├── processed_papers/            # Processed results (JSON)
-│   └── .processed_tracker.json # Tracks which papers were processed
 ├── .github/
 │   └── workflows/
-│       └── process_papers.yml  # GitHub Action workflow
+│       └── process_papers.yml  # GitHub Action workflow (runs every 6 hours)
 ├── process_papers.py           # Main processing script
 ├── google_drive_client.py      # Google Drive integration module
 ├── requirements.txt            # Python dependencies
-└── processing.log              # Processing logs
+└── processing.log              # Processing logs (local only)
 ```
 
-## Output Format
+### Google Drive Structure
 
-Each processed paper generates a JSON file with the following structure:
+```
+longevitypapers/                    # Your main folder in Google Drive
+├── paper1.pdf                      # PDF papers to process
+├── paper2.pdf
+├── mice_adf.pdf
+└── processed_papers/               # Auto-created subfolder for results
+    ├── paper1_processed.json       # Processed results
+    ├── paper2_processed.json
+    └── .processed_tracker.json     # Tracks which papers were processed
+```
+
+## Usage
+
+### Adding New Papers
+
+1. Upload PDF files to your `longevitypapers` folder in Google Drive
+2. Wait for the next scheduled run (every 6 hours), or
+3. Manually trigger via GitHub Actions tab > "Process Longevity Papers" > "Run workflow"
+
+The system will automatically:
+- Detect new PDFs
+- Download and process them
+- Save results to `processed_papers` subfolder in Google Drive
+- Track processed papers to avoid re-processing
+
+### Viewing Results
+
+Processed papers are saved in the `longevitypapers/processed_papers/` folder in your Google Drive as JSON files:
 
 ```json
 {
-  "filename": "paper.pdf",
+  "filename": "mice_adf.pdf",
   "processed_at": "2025-11-02T10:30:00",
   "stats": {
     "longevity_increase_percent": "25%",
-    "model_organism": "C. elegans",
-    "intervention_used": "rapamycin"
+    "model_organism": "mice",
+    "intervention_used": "alternate-day fasting"
   },
   "raw_text_preview": "First 1000 characters of extracted text..."
 }
 ```
 
-## Usage
+### Checking Processing Status
 
-### Adding New Papers (Google Drive)
-
-1. Upload your PDF files to the `longevitypapers` folder in Google Drive
-2. Edit `papers/kickoff.txt` (add a timestamp or increment a counter)
-3. Commit and push the changes
-4. The GitHub Action will automatically fetch PDFs from Google Drive and process any new ones
-
-### Adding New Papers (Local Folder)
-
-If not using Google Drive:
-
-1. Place your PDF files in the `papers/` folder
-2. Edit `papers/kickoff.txt` (add a timestamp or increment a counter)
-3. Commit and push the changes
-4. The GitHub Action will automatically process any new PDFs
-
-### Manual Processing
-
-To process papers locally:
-
-```bash
-python process_papers.py
-```
-
-### Checking Results
-
-Processed papers are saved in `processed_papers/` as JSON files with the naming convention:
-`{original_filename}_processed.json`
+- Check the Actions tab in GitHub to see workflow runs
+- View `processing.log` in workflow artifacts for detailed logs
+- Check the `.processed_tracker.json` file in Google Drive to see which papers have been processed
 
 ## Features
 
-- **Google Drive Integration**: Automatically fetches PDFs from your Google Drive folder
-- **Automatic Tracking**: Only processes new papers (tracked in `.processed_tracker.json`)
-- **AI-Powered Extraction**: Uses Grok AI to intelligently extract longevity statistics
+- **Cloud-Based**: All PDFs and results stored in Google Drive (no local storage needed)
+- **Automated**: Runs every 6 hours automatically via GitHub Actions
+- **Smart Tracking**: Only processes new papers, skips already-processed ones
+- **AI-Powered**: Uses Grok AI for intelligent extraction of longevity statistics
 - **Error Handling**: Comprehensive logging and error handling
-- **GitHub Integration**: Automatically commits processed results back to the repository
-- **Fallback Support**: Works with local folder if Google Drive is not configured
-
-## Logs
-
-Processing logs are saved to `processing.log` and include:
-- Papers being processed
-- Extraction results
-- Any errors encountered
+- **Manual Control**: Can be triggered manually anytime from GitHub Actions
 
 ## Troubleshooting
 
-**API Key Issues**: Ensure `XAI_API_KEY` is set in your environment or GitHub Secrets
+### "Google Drive authentication failed"
 
-**Google Drive Not Working**:
-- Check that `GOOGLE_CREDENTIALS` secret is properly set in GitHub
-- Verify the service account has access to the `longevitypapers` folder
-- Ensure the Google Drive API is enabled in your Google Cloud project
+- Verify `GOOGLE_DRIVE_CREDENTIALS` secret is set in GitHub
+- Check that the JSON is valid (copy the entire file contents)
+- Ensure the service account JSON key is not expired
 
-**PDF Extraction Fails**: Some PDFs may be scanned images requiring OCR (not currently supported)
+### "Could not find 'longevitypapers' folder"
 
-**GitHub Action Not Triggering**: Ensure you're committing changes to `papers/kickoff.txt` specifically
+- Make sure the folder is named exactly `longevitypapers` (case-sensitive)
+- Verify the folder is shared with the service account email
+- Check that the service account has "Editor" permissions
 
-**"Folder not found" Error**: Make sure the folder is named exactly `longevitypapers` and is shared with your service account
+### "Could not create 'processed_papers' subfolder"
+
+- Ensure the service account has **"Editor"** permissions (not just "Viewer")
+- Check that Google Drive API is enabled in your Google Cloud project
+
+### "No PDFs found in Google Drive"
+
+- Verify PDFs are directly in the `longevitypapers` folder (not in subfolders)
+- Check that files have `.pdf` extension
+- Ensure files are not in trash
+
+### "XAI_API_KEY not set"
+
+- Add `XAI_API_KEY` to GitHub Secrets
+- Get your API key from https://console.x.ai/
+
+### PDF Extraction Fails
+
+- Some PDFs may be scanned images requiring OCR (not currently supported)
+- Try using a text-based PDF instead
+
+## Workflow Schedule
+
+The GitHub Action runs:
+- **Every 6 hours** automatically (at :00 minutes)
+- **Manually** via the Actions tab in GitHub
+- You can adjust the schedule in `.github/workflows/process_papers.yml` by modifying the cron expression
 
 ## Contributing
 

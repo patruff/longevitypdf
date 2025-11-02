@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Dict
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload, MediaIoBaseUpload
 import io
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class GoogleDriveClient:
     """Client for interacting with Google Drive API."""
 
-    SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+    SCOPES = ['https://www.googleapis.com/auth/drive']
 
     def __init__(self, credentials_json: Optional[str] = None):
         """
@@ -26,17 +26,17 @@ class GoogleDriveClient:
 
         Args:
             credentials_json: JSON string containing service account credentials.
-                            If None, will try to load from GOOGLE_CREDENTIALS env var.
+                            If None, will try to load from GOOGLE_DRIVE_CREDENTIALS env var.
         """
         self.service = None
         self.temp_dir = None
 
         # Get credentials from parameter or environment variable
         if credentials_json is None:
-            credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+            credentials_json = os.getenv('GOOGLE_DRIVE_CREDENTIALS')
 
         if not credentials_json:
-            logger.warning("No Google Drive credentials provided. Set GOOGLE_CREDENTIALS environment variable.")
+            logger.warning("No Google Drive credentials provided. Set GOOGLE_DRIVE_CREDENTIALS environment variable.")
             return
 
         try:
@@ -214,6 +214,290 @@ class GoogleDriveClient:
 
         logger.info(f"Successfully downloaded {len(downloaded_files)} of {len(pdf_files)} PDFs")
         return downloaded_files
+
+    def find_subfolder(self, parent_folder_id: str, subfolder_name: str) -> Optional[str]:
+        """
+        Find a subfolder within a parent folder.
+
+        Args:
+            parent_folder_id: ID of the parent folder
+            subfolder_name: Name of the subfolder to find
+
+        Returns:
+            Subfolder ID if found, None otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            query = f"name='{subfolder_name}' and '{parent_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            results = self.service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)',
+                pageSize=10
+            ).execute()
+
+            items = results.get('files', [])
+            if items:
+                subfolder_id = items[0]['id']
+                logger.info(f"Found subfolder '{subfolder_name}' with ID: {subfolder_id}")
+                return subfolder_id
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error finding subfolder '{subfolder_name}': {e}")
+            return None
+
+    def create_folder(self, folder_name: str, parent_folder_id: str) -> Optional[str]:
+        """
+        Create a folder within a parent folder.
+
+        Args:
+            folder_name: Name of the folder to create
+            parent_folder_id: ID of the parent folder
+
+        Returns:
+            Created folder ID if successful, None otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            file_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [parent_folder_id]
+            }
+
+            folder = self.service.files().create(
+                body=file_metadata,
+                fields='id'
+            ).execute()
+
+            folder_id = folder.get('id')
+            logger.info(f"Created folder '{folder_name}' with ID: {folder_id}")
+            return folder_id
+
+        except Exception as e:
+            logger.error(f"Error creating folder '{folder_name}': {e}")
+            return None
+
+    def find_or_create_subfolder(self, parent_folder_id: str, subfolder_name: str) -> Optional[str]:
+        """
+        Find a subfolder or create it if it doesn't exist.
+
+        Args:
+            parent_folder_id: ID of the parent folder
+            subfolder_name: Name of the subfolder
+
+        Returns:
+            Subfolder ID
+        """
+        # Try to find existing subfolder
+        subfolder_id = self.find_subfolder(parent_folder_id, subfolder_name)
+
+        # Create if not found
+        if not subfolder_id:
+            logger.info(f"Subfolder '{subfolder_name}' not found, creating it...")
+            subfolder_id = self.create_folder(subfolder_name, parent_folder_id)
+
+        return subfolder_id
+
+    def upload_file(self, file_path: Path, folder_id: str, file_name: Optional[str] = None) -> Optional[str]:
+        """
+        Upload a file to a Google Drive folder.
+
+        Args:
+            file_path: Path to the local file to upload
+            folder_id: ID of the folder to upload to
+            file_name: Optional custom name for the file (defaults to original filename)
+
+        Returns:
+            Uploaded file ID if successful, None otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            if file_name is None:
+                file_name = file_path.name
+
+            file_metadata = {
+                'name': file_name,
+                'parents': [folder_id]
+            }
+
+            media = MediaFileUpload(
+                str(file_path),
+                resumable=True
+            )
+
+            file = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+
+            file_id = file.get('id')
+            logger.info(f"Uploaded '{file_name}' to Google Drive with ID: {file_id}")
+            return file_id
+
+        except Exception as e:
+            logger.error(f"Error uploading file '{file_path}': {e}")
+            return None
+
+    def upload_json_content(self, json_content: str, folder_id: str, file_name: str) -> Optional[str]:
+        """
+        Upload JSON content as a file to Google Drive.
+
+        Args:
+            json_content: JSON string content
+            folder_id: ID of the folder to upload to
+            file_name: Name for the file
+
+        Returns:
+            Uploaded file ID if successful, None otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            file_metadata = {
+                'name': file_name,
+                'parents': [folder_id]
+            }
+
+            media = MediaIoBaseUpload(
+                io.BytesIO(json_content.encode('utf-8')),
+                mimetype='application/json',
+                resumable=True
+            )
+
+            file = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+
+            file_id = file.get('id')
+            logger.info(f"Uploaded JSON file '{file_name}' to Google Drive with ID: {file_id}")
+            return file_id
+
+        except Exception as e:
+            logger.error(f"Error uploading JSON content '{file_name}': {e}")
+            return None
+
+    def file_exists_in_folder(self, folder_id: str, file_name: str) -> Optional[str]:
+        """
+        Check if a file exists in a folder by name.
+
+        Args:
+            folder_id: ID of the folder to search in
+            file_name: Name of the file to find
+
+        Returns:
+            File ID if found, None otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
+            results = self.service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)',
+                pageSize=1
+            ).execute()
+
+            items = results.get('files', [])
+            if items:
+                return items[0]['id']
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error checking if file '{file_name}' exists: {e}")
+            return None
+
+    def download_file_content(self, folder_id: str, file_name: str) -> Optional[str]:
+        """
+        Download a file's content as a string from a folder.
+
+        Args:
+            folder_id: ID of the folder
+            file_name: Name of the file to download
+
+        Returns:
+            File content as string, or None if not found
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return None
+
+        try:
+            # Find the file
+            file_id = self.file_exists_in_folder(folder_id, file_name)
+            if not file_id:
+                logger.info(f"File '{file_name}' not found in folder")
+                return None
+
+            # Download content
+            request = self.service.files().get_media(fileId=file_id)
+            file_content = io.BytesIO()
+            downloader = MediaIoBaseDownload(file_content, request)
+
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+
+            logger.info(f"Downloaded file '{file_name}' content")
+            return file_content.getvalue().decode('utf-8')
+
+        except Exception as e:
+            logger.error(f"Error downloading file content '{file_name}': {e}")
+            return None
+
+    def update_file_content(self, file_id: str, json_content: str) -> bool:
+        """
+        Update an existing file's content.
+
+        Args:
+            file_id: ID of the file to update
+            json_content: New JSON content
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_authenticated():
+            logger.error("Not authenticated with Google Drive")
+            return False
+
+        try:
+            media = MediaIoBaseUpload(
+                io.BytesIO(json_content.encode('utf-8')),
+                mimetype='application/json',
+                resumable=True
+            )
+
+            self.service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+
+            logger.info(f"Updated file with ID: {file_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating file content: {e}")
+            return False
 
     def cleanup_temp_files(self):
         """Clean up temporary downloaded files."""

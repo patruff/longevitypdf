@@ -1,6 +1,0 @@
-Kickoff file for paper processing.
-
-Edit this file and commit to trigger the GitHub Action that processes new papers.
-
-Last updated: 2025-11-02
-Kicking off Nov 2 - Pat
