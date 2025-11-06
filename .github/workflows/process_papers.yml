@@ -2,8 +2,6 @@ name: Process Longevity Papers
 
 on:
   workflow_dispatch:  # Allow manual triggering
-  schedule:
-    - cron: '0 */6 * * *'  # Run every 6 hours to check for new PDFs
 
 jobs:
   process-papers:
