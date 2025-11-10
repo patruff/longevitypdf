@@ -45,3 +45,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# MCP Server
+.longevity_papers_mcp/
+claude_desktop_config.json
