@@ -1,6 +1,35 @@
-# Longevity PDF Processor
+# Longevity Papers RAG System
 
-Automated system for processing scientific papers about longevity from Google Drive and extracting key statistics using AI.
+🧬 **AI-Powered Question Answering for Longevity Research Papers**
+
+## 🚀 New MCP Server (Recommended!)
+
+This project now includes an **MCP (Model Context Protocol) server** that provides RAG (Retrieval Augmented Generation) capabilities using Google's File Search Tool.
+
+### Features
+- 📄 Upload longevity research papers (PDFs)
+- 🔍 Query papers with natural language questions
+- 📚 Get AI-generated answers with citations
+- 💰 Free storage & embeddings (only pay for indexing: $0.15/1M tokens)
+
+### Quick Start
+
+👉 **[See QUICKSTART.md](QUICKSTART.md)** for 5-minute setup guide!
+
+📖 **[See MCP_README.md](MCP_README.md)** for full documentation
+
+### Why Use the MCP Server?
+- ✅ Natural language queries instead of manual JSON parsing
+- ✅ Automatic citations from source papers
+- ✅ Free storage and query embeddings
+- ✅ Interactive conversation with Claude
+- ✅ Better search quality (semantic vs keyword)
+
+---
+
+## 📚 Legacy System
+
+The original automated PDF processor is still available below.
 
 ## Overview
 

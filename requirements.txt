@@ -1,3 +1,8 @@
+# MCP Server Dependencies
+mcp>=1.0.0
+google-genai>=0.2.0
+
+# Legacy dependencies (keeping for backward compatibility)
 openai>=1.0.0
 PyPDF2>=3.0.0
 google-auth>=2.23.0
