@@ -153,25 +153,52 @@ def list_papers(client, store_name):
     """List all indexed papers in the store."""
     print("\n📚 Listing indexed papers...")
 
-    # List files in the store
-    files_list = client.file_search_stores.list_files(
-        file_search_store_name=store_name
-    )
+    try:
+        # Try to list documents in the store
+        # Based on API docs, there should be a documents API
+        if hasattr(client, 'file_search_documents'):
+            documents = client.file_search_documents.list(
+                file_search_store_name=store_name
+            )
 
-    if not files_list.files:
-        print("ℹ️  No papers indexed yet")
+            if not documents or not hasattr(documents, 'file_search_documents'):
+                print("ℹ️  No papers indexed yet")
+                return []
+
+            doc_list = list(documents.file_search_documents)
+            print(f"\n📊 Found {len(doc_list)} indexed paper(s):\n")
+            for i, doc in enumerate(doc_list, 1):
+                print(f"{i}. {getattr(doc, 'display_name', 'Unknown')}")
+                print(f"   ID: {doc.name}")
+                if hasattr(doc, 'state'):
+                    print(f"   State: {doc.state}")
+                if hasattr(doc, 'create_time'):
+                    print(f"   Uploaded: {doc.create_time}")
+                print()
+
+            return doc_list
+        else:
+            print("ℹ️  Document listing not available in this API version")
+            print(f"   Store: {store_name}")
+            return []
+
+    except Exception as e:
+        print(f"⚠️  Could not list documents: {e}")
+        print(f"   Store: {store_name}")
+
+        # Debug: show available methods
+        print(f"\n🔍 Debug - Available file_search_stores methods:")
+        for attr in dir(client.file_search_stores):
+            if not attr.startswith('_'):
+                print(f"   - {attr}")
+
+        if hasattr(client, 'file_search_documents'):
+            print(f"\n🔍 Debug - Available file_search_documents methods:")
+            for attr in dir(client.file_search_documents):
+                if not attr.startswith('_'):
+                    print(f"   - {attr}")
+
         return []
-
-    print(f"\n📊 Found {len(files_list.files)} indexed paper(s):\n")
-    for i, file in enumerate(files_list.files, 1):
-        print(f"{i}. {file.display_name}")
-        print(f"   ID: {file.name}")
-        print(f"   State: {file.state}")
-        if hasattr(file, 'create_time'):
-            print(f"   Uploaded: {file.create_time}")
-        print()
-
-    return list(files_list.files)
 
 
 def main():

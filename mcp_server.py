@@ -360,34 +360,44 @@ async def list_indexed_papers(arguments: dict[str, Any]) -> list[mcp_types.TextC
 
         logger.info("Listing indexed papers...")
 
-        # List files in the store
-        files_list = client.file_search_stores.list_files(
-            file_search_store_name=store_name
-        )
+        # Try to list documents in the store
+        if hasattr(client, 'file_search_documents'):
+            documents = client.file_search_documents.list(
+                file_search_store_name=store_name
+            )
 
-        if not files_list.files:
+            if not documents or not hasattr(documents, 'file_search_documents'):
+                return [mcp_types.TextContent(
+                    type="text",
+                    text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
+                )]
+
+            doc_list = list(documents.file_search_documents)
+
+            # Format document list
+            result = "## Indexed Longevity Papers\n\n"
+            for i, doc in enumerate(doc_list, 1):
+                display_name = getattr(doc, 'display_name', 'Unknown')
+                result += f"{i}. **{display_name}**\n"
+                result += f"   - Document ID: `{doc.name}`\n"
+                if hasattr(doc, 'state'):
+                    result += f"   - State: {doc.state}\n"
+                if hasattr(doc, 'create_time'):
+                    result += f"   - Uploaded: {doc.create_time}\n"
+                result += "\n"
+
+            result += f"\n**Total papers: {len(doc_list)}**\n"
+            result += f"**Store: {store_name}**"
+
             return [mcp_types.TextContent(
                 type="text",
-                text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
+                text=result
             )]
-
-        # Format file list
-        result = "## Indexed Longevity Papers\n\n"
-        for i, file in enumerate(files_list.files, 1):
-            result += f"{i}. **{file.display_name}**\n"
-            result += f"   - File ID: `{file.name}`\n"
-            result += f"   - State: {file.state}\n"
-            if hasattr(file, 'create_time'):
-                result += f"   - Uploaded: {file.create_time}\n"
-            result += "\n"
-
-        result += f"\n**Total papers: {len(files_list.files)}**\n"
-        result += f"**Store: {store_name}**"
-
-        return [mcp_types.TextContent(
-            type="text",
-            text=result
-        )]
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=f"Document listing not available in this API version.\n\nStore: {store_name}"
+            )]
 
     except Exception as e:
         logger.error(f"Error listing papers: {e}", exc_info=True)
