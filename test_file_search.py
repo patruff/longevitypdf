@@ -68,27 +68,34 @@ def upload_pdf(client, store_name, file_path):
     print(f"\n📤 Uploading {file_path.name}...")
 
     # Upload file to the file search store
-    upload_op = client.file_search_stores.upload_to_file_search_store(
+    upload_response = client.file_search_stores.upload_to_file_search_store(
         file_search_store_name=store_name,
         file=str(file_path)
     )
+
+    # Get operation name (handle both string and object responses)
+    if isinstance(upload_response, str):
+        op_name = upload_response
+    else:
+        op_name = upload_response.name if hasattr(upload_response, 'name') else str(upload_response)
 
     # Wait for upload to complete
     print("⏳ Waiting for upload and indexing...")
     max_wait = 300  # 5 minutes max
     start_time = time.time()
 
-    while not upload_op.done:
+    operation = client.operations.get(op_name)
+    while not operation.done:
         if time.time() - start_time > max_wait:
             raise TimeoutError("Upload timed out after 5 minutes")
         time.sleep(2)
-        upload_op = client.operations.get(upload_op.name)
+        operation = client.operations.get(op_name)
         elapsed = int(time.time() - start_time)
         print(f"  ⏱️  {elapsed}s elapsed...", end='\r')
 
     print(f"\n✅ Successfully uploaded and indexed: {file_path.name}")
 
-    return upload_op
+    return operation
 
 
 def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
