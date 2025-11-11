@@ -240,11 +240,8 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
 
         # Upload file to the file search store
         operation = client.file_search_stores.upload_to_file_search_store(
-            file=str(file_path),
             file_search_store_name=store_name,
-            config={
-                'display_name': file_path.name,
-            }
+            file=str(file_path)
         )
 
         # Wait for upload to complete
@@ -262,6 +259,10 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
             operation = client.operations.get(operation)
 
         logger.info(f"Successfully uploaded and indexed {file_path.name}")
+
+        # Wait to ensure document is available
+        logger.info("Ensuring document is available for querying...")
+        time.sleep(10)
 
         return [mcp_types.TextContent(
             type="text",
@@ -298,23 +299,24 @@ async def query_longevity_papers(arguments: dict[str, Any]) -> list[mcp_types.Te
 
         logger.info(f"Querying papers with: {query}")
 
-        # Generate content with file search
+        # Use the file search store as a tool in generation call
+        # Use dict format for better compatibility
         response = client.models.generate_content(
             model=model,
             contents=query,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(
-                    file_search=types.FileSearch(
-                        file_search_store_names=[store_name]
-                    )
-                )]
-            )
+            config={
+                'tools': [{
+                    'file_search': {
+                        'file_search_store_names': [store_name]
+                    }
+                }]
+            }
         )
 
         # Extract answer
         answer = response.text
 
-        # Extract citations
+        # Extract citations from grounding metadata
         citations = []
         if response.candidates and len(response.candidates) > 0:
             grounding = response.candidates[0].grounding_metadata
@@ -363,13 +365,14 @@ async def list_indexed_papers(arguments: dict[str, Any]) -> list[mcp_types.TextC
         # List documents in the store using the documents API
         response = client.file_search_stores.documents.list(parent=store_name)
 
-        if not response or not hasattr(response, 'documents') or not response.documents:
+        # Pager is an iterator - convert to list directly
+        doc_list = list(response)
+
+        if not doc_list:
             return [mcp_types.TextContent(
                 type="text",
                 text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
             )]
-
-        doc_list = list(response.documents)
 
         # Calculate stats
         total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
