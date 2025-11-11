@@ -154,33 +154,49 @@ def list_papers(client, store_name):
     print("\n📚 Listing indexed papers...")
 
     try:
-        # Try to list documents in the store
-        # Based on API docs, there should be a documents API
-        if hasattr(client, 'file_search_documents'):
-            documents = client.file_search_documents.list(
-                file_search_store_name=store_name
-            )
+        # List documents in the store using the documents API
+        response = client.file_search_stores.documents.list(parent=store_name)
 
-            if not documents or not hasattr(documents, 'file_search_documents'):
-                print("ℹ️  No papers indexed yet")
-                return []
-
-            doc_list = list(documents.file_search_documents)
-            print(f"\n📊 Found {len(doc_list)} indexed paper(s):\n")
-            for i, doc in enumerate(doc_list, 1):
-                print(f"{i}. {getattr(doc, 'display_name', 'Unknown')}")
-                print(f"   ID: {doc.name}")
-                if hasattr(doc, 'state'):
-                    print(f"   State: {doc.state}")
-                if hasattr(doc, 'create_time'):
-                    print(f"   Uploaded: {doc.create_time}")
-                print()
-
-            return doc_list
-        else:
-            print("ℹ️  Document listing not available in this API version")
-            print(f"   Store: {store_name}")
+        if not response or not hasattr(response, 'documents') or not response.documents:
+            print("ℹ️  No papers indexed yet")
             return []
+
+        doc_list = list(response.documents)
+
+        # Calculate stats
+        total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
+        total_mb = total_bytes / (1024 * 1024)
+
+        # Estimate tokens (roughly 1 token per 4 characters, 1 char = 1 byte for ASCII)
+        estimated_tokens = total_bytes // 4
+        estimated_cost = (estimated_tokens / 1_000_000) * 0.15
+
+        print(f"\n📊 Found {len(doc_list)} indexed paper(s):\n")
+        for i, doc in enumerate(doc_list, 1):
+            display_name = getattr(doc, 'display_name', 'Unknown')
+            size_bytes = int(getattr(doc, 'size_bytes', 0))
+            size_mb = size_bytes / (1024 * 1024)
+
+            print(f"{i}. {display_name}")
+            print(f"   ID: {doc.name}")
+            print(f"   Size: {size_mb:.2f} MB ({size_bytes:,} bytes)")
+            if hasattr(doc, 'state'):
+                print(f"   State: {doc.state}")
+            if hasattr(doc, 'create_time'):
+                print(f"   Uploaded: {doc.create_time}")
+            print()
+
+        # Print summary stats
+        print("="*80)
+        print("📈 INDEXING STATISTICS")
+        print("="*80)
+        print(f"📄 Total Papers: {len(doc_list)}")
+        print(f"📦 Total Size: {total_mb:.2f} MB ({total_bytes:,} bytes)")
+        print(f"🔤 Estimated Tokens: ~{estimated_tokens:,}")
+        print(f"💰 Estimated Indexing Cost: ~${estimated_cost:.4f}")
+        print("="*80)
+
+        return doc_list
 
     except Exception as e:
         print(f"⚠️  Could not list documents: {e}")
@@ -192,9 +208,9 @@ def list_papers(client, store_name):
             if not attr.startswith('_'):
                 print(f"   - {attr}")
 
-        if hasattr(client, 'file_search_documents'):
-            print(f"\n🔍 Debug - Available file_search_documents methods:")
-            for attr in dir(client.file_search_documents):
+        if hasattr(client.file_search_stores, 'documents'):
+            print(f"\n🔍 Debug - Available documents methods:")
+            for attr in dir(client.file_search_stores.documents):
                 if not attr.startswith('_'):
                     print(f"   - {attr}")
 

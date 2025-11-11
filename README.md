@@ -1,239 +1,343 @@
-# Longevity Papers RAG System
+# Longevity Papers RAG - MCP Server
 
-🧬 **AI-Powered Question Answering for Longevity Research Papers**
+🧬 **Query longevity research papers with AI-powered RAG (Retrieval Augmented Generation)**
 
-## 🚀 New MCP Server (Recommended!)
+An MCP (Model Context Protocol) server that provides intelligent search and question-answering capabilities over longevity research papers using Google's File Search Tool. Upload PDFs, ask questions in natural language, and get AI-generated answers with proper citations!
 
-This project now includes an **MCP (Model Context Protocol) server** that provides RAG (Retrieval Augmented Generation) capabilities using Google's File Search Tool.
+## 🚀 Features
 
-### Features
-- 📄 Upload longevity research papers (PDFs)
-- 🔍 Query papers with natural language questions
-- 📚 Get AI-generated answers with citations
-- 💰 Free storage & embeddings (only pay for indexing: $0.15/1M tokens)
+- **📄 PDF Upload**: Upload longevity research papers to Google's File Search store
+- **🔍 Intelligent Search**: Query papers using natural language questions
+- **📚 Citation Support**: Get AI-generated answers with proper source citations
+- **📈 Usage Tracking**: Track indexed papers, total tokens, and estimated costs
+- **💰 Cost Effective**:
+  - Storage: **FREE**
+  - Query embeddings: **FREE**
+  - Initial indexing: $0.15 per 1M tokens (one-time cost)
+- **🔄 Persistent Storage**: Files persist across sessions
+- **🛠️ Full Management**: List, query, and delete indexed papers
 
-### Quick Start
+## 📋 Prerequisites
 
-👉 **[See QUICKSTART.md](QUICKSTART.md)** for 5-minute setup guide!
+- Python 3.10+
+- Google GenAI API key ([Get one free here](https://aistudio.google.com/apikey))
+- Claude Desktop (or any MCP-compatible client)
 
-📖 **[See MCP_README.md](MCP_README.md)** for full documentation
+## 🛠️ Installation
 
-### Why Use the MCP Server?
-- ✅ Natural language queries instead of manual JSON parsing
-- ✅ Automatic citations from source papers
-- ✅ Free storage and query embeddings
-- ✅ Interactive conversation with Claude
-- ✅ Better search quality (semantic vs keyword)
+### 1. Clone and Setup
 
----
-
-## 📚 Legacy System
-
-The original automated PDF processor is still available below.
-
-## Overview
-
-This repository automatically processes PDF papers about longevity research stored in Google Drive and extracts:
-- **longevity_increase_percent**: Percentage increase in lifespan
-- **model_organism**: The organism studied (e.g., C. elegans, mice, rats, humans)
-- **intervention_used**: The treatment or intervention applied (e.g., rapamycin, caloric restriction)
-
-All PDFs are sourced from Google Drive, and processed results are saved back to Google Drive in a `processed_papers` subfolder.
-
-## How It Works
-
-1. **Upload Papers**: Add PDF files to your `longevitypapers` folder in Google Drive
-2. **Automated Processing**: GitHub Action runs every 6 hours (or manually triggered) to check for new PDFs
-3. **AI Extraction**: Grok AI extracts longevity statistics from each paper
-4. **Results Stored**: Processed results saved to `longevitypapers/processed_papers/` folder in Google Drive
-5. **Tracking**: System tracks which papers have been processed to avoid duplicates
-
-## Setup
-
-### Prerequisites
-
-- Python 3.11+
-- xAI API key (for Grok AI)
-- Google Cloud Service Account with Google Drive API access
-
-### Google Drive Setup
-
-#### 1. Create a Google Cloud Project
-
-- Go to [Google Cloud Console](https://console.cloud.google.com/)
-- Create a new project or select an existing one
-
-#### 2. Enable Google Drive API
-
-- Navigate to "APIs & Services" > "Library"
-- Search for "Google Drive API"
-- Click "Enable"
-
-#### 3. Create a Service Account
-
-- Go to "APIs & Services" > "Credentials"
-- Click "Create Credentials" > "Service Account"
-- Fill in the service account details and create
-
-#### 4. Generate JSON Key
-
-- Click on the created service account
-- Go to "Keys" tab
-- Click "Add Key" > "Create new key"
-- Choose JSON format and download the file
-
-#### 5. Create and Share Google Drive Folder
-
-- Create a folder named `longevitypapers` in your Google Drive (must be this exact name)
-- Right-click the folder and click "Share"
-- Share it with the service account email (found in the JSON file as `client_email`)
-- Give it **"Editor"** permissions (required for creating the `processed_papers` subfolder)
-
-#### 6. Add GitHub Secrets
-
-- Go to your repo Settings > Secrets and variables > Actions
-- Add a new secret named `GOOGLE_DRIVE_CREDENTIALS`
-- Paste the entire contents of the JSON key file as the value
-- Add another secret named `XAI_API_KEY` with your xAI API key (get from https://console.x.ai/)
-
-### Local Setup (Optional)
-
-To run the processor locally:
-
-1. Install dependencies:
 ```bash
+git clone https://github.com/patruff/longevitypdf.git
+cd longevitypdf
 pip install -r requirements.txt
 ```
 
-2. Set your environment variables:
-```bash
-export XAI_API_KEY="your-xai-api-key-here"
-export GOOGLE_DRIVE_CREDENTIALS='{"type": "service_account", "project_id": "...", ...}'
-```
+### 2. Get Google GenAI API Key
 
-3. Run the processor:
-```bash
-python process_papers.py
-```
+1. Go to [Google AI Studio](https://aistudio.google.com/apikey)
+2. Click "Create API Key"
+3. Copy your API key
 
-## Project Structure
+### 3. Configure Claude Desktop
 
-```
-longevitypdf/
-├── .github/
-│   └── workflows/
-│       └── process_papers.yml  # GitHub Action workflow (runs every 6 hours)
-├── process_papers.py           # Main processing script
-├── google_drive_client.py      # Google Drive integration module
-├── requirements.txt            # Python dependencies
-└── processing.log              # Processing logs (local only)
-```
+Add the MCP server to your Claude Desktop configuration:
 
-### Google Drive Structure
-
-```
-longevitypapers/                    # Your main folder in Google Drive
-├── paper1.pdf                      # PDF papers to process
-├── paper2.pdf
-├── mice_adf.pdf
-└── processed_papers/               # Auto-created subfolder for results
-    ├── paper1_processed.json       # Processed results
-    ├── paper2_processed.json
-    └── .processed_tracker.json     # Tracks which papers were processed
-```
-
-## Usage
-
-### Adding New Papers
-
-1. Upload PDF files to your `longevitypapers` folder in Google Drive
-2. Wait for the next scheduled run (every 6 hours), or
-3. Manually trigger via GitHub Actions tab > "Process Longevity Papers" > "Run workflow"
-
-The system will automatically:
-- Detect new PDFs
-- Download and process them
-- Save results to `processed_papers` subfolder in Google Drive
-- Track processed papers to avoid re-processing
-
-### Viewing Results
-
-Processed papers are saved in the `longevitypapers/processed_papers/` folder in your Google Drive as JSON files:
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
-  "filename": "mice_adf.pdf",
-  "processed_at": "2025-11-02T10:30:00",
-  "stats": {
-    "longevity_increase_percent": "25%",
-    "model_organism": "mice",
-    "intervention_used": "alternate-day fasting"
-  },
-  "raw_text_preview": "First 1000 characters of extracted text..."
+  "mcpServers": {
+    "longevity-papers": {
+      "command": "python",
+      "args": ["/absolute/path/to/longevitypdf/mcp_server.py"],
+      "env": {
+        "GOOGLE_GENAI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
 }
 ```
 
-### Checking Processing Status
+**Important**: Replace `/absolute/path/to/longevitypdf/` with the actual absolute path to this directory!
 
-- Check the Actions tab in GitHub to see workflow runs
-- View `processing.log` in workflow artifacts for detailed logs
-- Check the `.processed_tracker.json` file in Google Drive to see which papers have been processed
+### 4. Restart Claude Desktop
 
-## Features
+Close and reopen Claude Desktop. The server will now be available!
 
-- **Cloud-Based**: All PDFs and results stored in Google Drive (no local storage needed)
-- **Automated**: Runs every 6 hours automatically via GitHub Actions
-- **Smart Tracking**: Only processes new papers, skips already-processed ones
-- **AI-Powered**: Uses Grok AI for intelligent extraction of longevity statistics
-- **Error Handling**: Comprehensive logging and error handling
-- **Manual Control**: Can be triggered manually anytime from GitHub Actions
+## 🎯 Available Tools
 
-## Troubleshooting
+### 1. `upload_longevity_paper`
 
-### "Google Drive authentication failed"
+Upload a PDF research paper to the RAG system.
 
-- Verify `GOOGLE_DRIVE_CREDENTIALS` secret is set in GitHub
-- Check that the JSON is valid (copy the entire file contents)
-- Ensure the service account JSON key is not expired
+**Parameters:**
+- `file_path` (required): Path to the PDF file
 
-### "Could not find 'longevitypapers' folder"
+**Example:**
+```
+Upload ~/Documents/rapamycin_longevity_study.pdf to the system
+```
 
-- Make sure the folder is named exactly `longevitypapers` (case-sensitive)
-- Verify the folder is shared with the service account email
-- Check that the service account has "Editor" permissions
+### 2. `query_longevity_papers`
 
-### "Could not create 'processed_papers' subfolder"
+Ask questions about the indexed papers in natural language.
 
-- Ensure the service account has **"Editor"** permissions (not just "Viewer")
-- Check that Google Drive API is enabled in your Google Cloud project
+**Parameters:**
+- `query` (required): Your question about longevity research
+- `model` (optional): Gemini model to use (default: gemini-2.0-flash-exp)
 
-### "No PDFs found in Google Drive"
+**Example Questions:**
+- "What interventions have been shown to increase lifespan in mice?"
+- "Which studies show the highest longevity gains from caloric restriction?"
+- "What are the effects of rapamycin on aging in C. elegans?"
+- "Compare the longevity benefits of metformin vs rapamycin"
+- "What model organisms are most commonly used in longevity research?"
 
-- Verify PDFs are directly in the `longevitypapers` folder (not in subfolders)
-- Check that files have `.pdf` extension
-- Ensure files are not in trash
+### 3. `list_indexed_papers`
 
-### "XAI_API_KEY not set"
+List all papers currently in the RAG system with detailed statistics:
+- Total papers indexed
+- Total size in MB
+- Estimated tokens processed
+- Estimated indexing cost
 
-- Add `XAI_API_KEY` to GitHub Secrets
-- Get your API key from https://console.x.ai/
+**Example:**
+```
+Show me all the papers in the RAG system
+```
 
-### PDF Extraction Fails
+### 4. `get_store_info`
 
-- Some PDFs may be scanned images requiring OCR (not currently supported)
-- Try using a text-based PDF instead
+Get information about the current file search store, including configuration and pricing details.
 
-## Workflow Schedule
+### 5. `delete_paper`
 
-The GitHub Action runs:
-- **Every 6 hours** automatically (at :00 minutes)
-- **Manually** via the Actions tab in GitHub
-- You can adjust the schedule in `.github/workflows/process_papers.yml` by modifying the cron expression
+Delete a specific paper from the RAG system.
 
-## Contributing
+**Parameters:**
+- `file_id` (required): File ID from `list_indexed_papers`
 
-Feel free to open issues or submit pull requests for improvements.
+## 💡 Usage Examples
 
-## License
+### Getting Started
 
-MIT
+1. **Upload your first paper:**
+   ```
+   Upload ~/Documents/longevity_papers/rapamycin_mice.pdf to the system
+   ```
+
+2. **Check indexing statistics:**
+   ```
+   List all indexed papers
+   ```
+
+3. **Query the papers:**
+   ```
+   What did the rapamycin study find about lifespan extension in mice?
+   ```
+
+### Advanced Queries
+
+Ask complex questions that span multiple papers:
+
+- "Compare the effectiveness of dietary restriction vs pharmacological interventions"
+- "What are the common mechanisms of action across successful longevity interventions?"
+- "Which interventions have been tested in both mice and humans?"
+- "What are the most promising interventions for human longevity based on animal studies?"
+
+## 🔧 Testing & CI/CD
+
+### GitHub Actions Workflow
+
+The repository includes a workflow (`test_file_search.yml`) that automatically:
+1. Uploads PDFs to Google File Search
+2. Runs example queries
+3. Shows indexing statistics
+
+Run it manually from the Actions tab or it triggers automatically on PDF changes.
+
+### Local Testing
+
+```bash
+export GOOGLE_GENAI_API_KEY="your_key_here"
+python test_file_search.py
+```
+
+## 🏗️ Architecture
+
+### Google File Search Tool
+
+The MCP server uses Google's [File Search Tool](https://ai.google.dev/gemini-api/docs/file-search) which provides:
+
+- **Automatic chunking**: Optimal text splitting for embeddings
+- **Vector search**: Semantic search powered by `gemini-embedding-001`
+- **Managed infrastructure**: No need to manage vector databases
+- **Built-in citations**: Automatic source tracking
+
+### Storage
+
+- **File Search Store**: Created automatically on first use
+- **Config file**: `~/.longevity_papers_mcp/store_config.json`
+- **Persistence**: Store name is saved and reused across sessions
+
+### Pricing
+
+| Operation | Cost |
+|-----------|------|
+| Storage | **FREE** |
+| Query embeddings | **FREE** |
+| Initial indexing | $0.15 per 1M tokens |
+
+**Example**: A typical research paper (20 pages) ≈ 10K tokens = **$0.0015 to index**
+
+## 📈 Tracking & Statistics
+
+The `list_indexed_papers` tool provides detailed metrics:
+
+- **Papers Indexed**: Total number of documents
+- **Total Size**: Combined size in MB and bytes
+- **Estimated Tokens**: Approximate token count (~1 token per 4 characters)
+- **Estimated Cost**: Total indexing cost at $0.15 per 1M tokens
+
+Example output:
+```
+📈 INDEXING STATISTICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 Total Papers: 5
+📦 Total Size: 12.45 MB (13,058,048 bytes)
+🔤 Estimated Tokens: ~3,264,512
+💰 Estimated Indexing Cost: ~$0.4897
+```
+
+## 🔧 Development
+
+### Project Structure
+
+```
+longevitypdf/
+├── mcp_server.py              # Main MCP server implementation
+├── test_file_search.py        # Standalone testing script
+├── requirements.txt           # Python dependencies
+├── .env.example              # Environment variable template
+├── README.md                 # This file
+├── vitd_telomere.pdf         # Example research paper
+└── .github/
+    └── workflows/
+        └── test_file_search.yml  # CI/CD workflow
+```
+
+### Running Standalone (Testing)
+
+```bash
+# Set your API key
+export GOOGLE_GENAI_API_KEY="your_key_here"
+
+# Run the server (for testing/debugging)
+python mcp_server.py
+```
+
+The server communicates via stdio (standard input/output) using the MCP protocol.
+
+### Logging
+
+Logs are written to stderr and include:
+- Server startup/initialization
+- File uploads and indexing
+- Query operations
+- Error messages
+
+View logs in Claude Desktop's developer console.
+
+## 🐛 Troubleshooting
+
+### "GOOGLE_GENAI_API_KEY environment variable not set"
+
+- Check that your `claude_desktop_config.json` has the correct API key
+- Restart Claude Desktop after making changes
+
+### "File not found" when uploading
+
+- Use absolute paths: `/Users/yourname/Documents/paper.pdf`
+- Or expand home directory: `~/Documents/paper.pdf`
+- Check file exists and has `.pdf` extension
+
+### "Upload timed out"
+
+- Large PDFs (>50 pages) may take a few minutes to index
+- Check your internet connection
+- Try uploading smaller PDFs first
+
+### No citations in query response
+
+- This is normal for some queries that don't require specific sources
+- Try more specific questions that reference paper content
+- Ensure papers are successfully uploaded (check with `list_indexed_papers`)
+
+### Server not appearing in Claude Desktop
+
+1. Check JSON syntax in `claude_desktop_config.json`
+2. Verify absolute path to `mcp_server.py` is correct
+3. Ensure Python is in your PATH
+4. Restart Claude Desktop completely
+
+## 🔒 Privacy & Security
+
+- **API Key**: Your Google GenAI API key is stored locally in Claude Desktop config
+- **Papers**: PDFs are uploaded to Google's File Search service
+- **Data**: Google's standard [terms of service](https://ai.google.dev/gemini-api/terms) apply
+- **Local Storage**: Only store name is saved locally (`~/.longevity_papers_mcp/`)
+
+## 📚 Resources
+
+- [Google File Search Tool Announcement](https://developers.googleblog.com/en/introducing-the-file-search-tool-in-gemini-api/)
+- [File Search Documentation](https://ai.google.dev/gemini-api/docs/file-search)
+- [File Search Documents API](https://ai.google.dev/gemini-api/docs/file-search-documents)
+- [MCP Protocol Specification](https://spec.modelcontextprotocol.io/)
+- [Google AI Studio](https://aistudio.google.com/)
+
+## 🎓 Use Cases
+
+### Research
+- Literature reviews on longevity interventions
+- Cross-study comparisons
+- Finding specific experimental details
+
+### Learning
+- Understanding longevity research landscape
+- Exploring different model organisms
+- Learning about intervention mechanisms
+
+### Analysis
+- Identifying research gaps
+- Comparing methodologies
+- Extracting statistics across studies
+
+## 🚀 Future Enhancements
+
+Potential improvements:
+- [ ] Bulk PDF upload from directory
+- [ ] Export query results to markdown/JSON
+- [ ] Custom embedding models (BioBERT support)
+- [ ] Advanced filtering (by year, organism, intervention)
+- [ ] Paper metadata extraction
+- [ ] Integration with PubMed API
+- [ ] Automatic paper recommendations
+- [ ] Cost tracking over time
+- [ ] Custom chunking strategies
+
+## 📝 License
+
+MIT License - See LICENSE file for details
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue or PR.
+
+---
+
+**Built with ❤️ for longevity research**
+
+*Using Google's File Search Tool + MCP Protocol*

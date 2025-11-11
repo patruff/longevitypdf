@@ -360,44 +360,53 @@ async def list_indexed_papers(arguments: dict[str, Any]) -> list[mcp_types.TextC
 
         logger.info("Listing indexed papers...")
 
-        # Try to list documents in the store
-        if hasattr(client, 'file_search_documents'):
-            documents = client.file_search_documents.list(
-                file_search_store_name=store_name
-            )
+        # List documents in the store using the documents API
+        response = client.file_search_stores.documents.list(parent=store_name)
 
-            if not documents or not hasattr(documents, 'file_search_documents'):
-                return [mcp_types.TextContent(
-                    type="text",
-                    text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
-                )]
-
-            doc_list = list(documents.file_search_documents)
-
-            # Format document list
-            result = "## Indexed Longevity Papers\n\n"
-            for i, doc in enumerate(doc_list, 1):
-                display_name = getattr(doc, 'display_name', 'Unknown')
-                result += f"{i}. **{display_name}**\n"
-                result += f"   - Document ID: `{doc.name}`\n"
-                if hasattr(doc, 'state'):
-                    result += f"   - State: {doc.state}\n"
-                if hasattr(doc, 'create_time'):
-                    result += f"   - Uploaded: {doc.create_time}\n"
-                result += "\n"
-
-            result += f"\n**Total papers: {len(doc_list)}**\n"
-            result += f"**Store: {store_name}**"
-
+        if not response or not hasattr(response, 'documents') or not response.documents:
             return [mcp_types.TextContent(
                 type="text",
-                text=result
+                text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
             )]
-        else:
-            return [mcp_types.TextContent(
-                type="text",
-                text=f"Document listing not available in this API version.\n\nStore: {store_name}"
-            )]
+
+        doc_list = list(response.documents)
+
+        # Calculate stats
+        total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
+        total_mb = total_bytes / (1024 * 1024)
+
+        # Estimate tokens (roughly 1 token per 4 characters)
+        estimated_tokens = total_bytes // 4
+        estimated_cost = (estimated_tokens / 1_000_000) * 0.15
+
+        # Format document list
+        result = "## Indexed Longevity Papers\n\n"
+        for i, doc in enumerate(doc_list, 1):
+            display_name = getattr(doc, 'display_name', 'Unknown')
+            size_bytes = int(getattr(doc, 'size_bytes', 0))
+            size_mb = size_bytes / (1024 * 1024)
+
+            result += f"{i}. **{display_name}**\n"
+            result += f"   - Document ID: `{doc.name}`\n"
+            result += f"   - Size: {size_mb:.2f} MB ({size_bytes:,} bytes)\n"
+            if hasattr(doc, 'state'):
+                result += f"   - State: {doc.state}\n"
+            if hasattr(doc, 'create_time'):
+                result += f"   - Uploaded: {doc.create_time}\n"
+            result += "\n"
+
+        result += "---\n\n"
+        result += "## 📈 Indexing Statistics\n\n"
+        result += f"- **Total Papers**: {len(doc_list)}\n"
+        result += f"- **Total Size**: {total_mb:.2f} MB ({total_bytes:,} bytes)\n"
+        result += f"- **Estimated Tokens**: ~{estimated_tokens:,}\n"
+        result += f"- **Estimated Indexing Cost**: ~${estimated_cost:.4f}\n\n"
+        result += f"**Store**: `{store_name}`"
+
+        return [mcp_types.TextContent(
+            type="text",
+            text=result
+        )]
 
     except Exception as e:
         logger.error(f"Error listing papers: {e}", exc_info=True)
