@@ -110,10 +110,6 @@ async def handle_list_tools() -> list[mcp_types.Tool]:
                     "file_path": {
                         "type": "string",
                         "description": "Path to the PDF file to upload"
-                    },
-                    "display_name": {
-                        "type": "string",
-                        "description": "Optional display name for the file (defaults to filename)"
                     }
                 },
                 "required": ["file_path"]
@@ -215,7 +211,6 @@ async def handle_call_tool(
 async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.TextContent]:
     """Upload a PDF to the file search store."""
     file_path = arguments.get("file_path")
-    display_name = arguments.get("display_name")
 
     if not file_path:
         return [mcp_types.TextContent(
@@ -244,10 +239,12 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
         logger.info(f"Uploading {file_path.name} to file search store...")
 
         # Upload file to the file search store
-        upload_op = client.file_search_stores.upload_to_file_search_store(
-            file_search_store_name=store_name,
+        operation = client.file_search_stores.upload_to_file_search_store(
             file=str(file_path),
-            display_name=display_name or file_path.name
+            file_search_store_name=store_name,
+            config={
+                'display_name': file_path.name,
+            }
         )
 
         # Wait for upload to complete
@@ -255,14 +252,14 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
         max_wait = 300  # 5 minutes max
         start_time = time.time()
 
-        while not upload_op.done:
+        while not operation.done:
             if time.time() - start_time > max_wait:
                 return [mcp_types.TextContent(
                     type="text",
                     text="Error: Upload timed out after 5 minutes"
                 )]
-            time.sleep(2)
-            upload_op = client.operations.get(upload_op.name)
+            time.sleep(5)
+            operation = client.operations.get(operation)
 
         logger.info(f"Successfully uploaded and indexed {file_path.name}")
 
@@ -271,8 +268,7 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
             text=(
                 f"✅ Successfully uploaded and indexed: {file_path.name}\n\n"
                 f"The paper is now searchable in the RAG system.\n"
-                f"Store: {store_name}\n"
-                f"Display name: {display_name or file_path.name}\n\n"
+                f"Store: {store_name}\n\n"
                 f"You can now query it using the 'query_longevity_papers' tool!"
             )
         )]
@@ -364,29 +360,48 @@ async def list_indexed_papers(arguments: dict[str, Any]) -> list[mcp_types.TextC
 
         logger.info("Listing indexed papers...")
 
-        # List files in the store
-        files_list = client.file_search_stores.list_files(
-            file_search_store_name=store_name
-        )
+        # List documents in the store using the documents API
+        response = client.file_search_stores.documents.list(parent=store_name)
 
-        if not files_list.files:
+        if not response or not hasattr(response, 'documents') or not response.documents:
             return [mcp_types.TextContent(
                 type="text",
                 text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
             )]
 
-        # Format file list
+        doc_list = list(response.documents)
+
+        # Calculate stats
+        total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
+        total_mb = total_bytes / (1024 * 1024)
+
+        # Estimate tokens (roughly 1 token per 4 characters)
+        estimated_tokens = total_bytes // 4
+        estimated_cost = (estimated_tokens / 1_000_000) * 0.15
+
+        # Format document list
         result = "## Indexed Longevity Papers\n\n"
-        for i, file in enumerate(files_list.files, 1):
-            result += f"{i}. **{file.display_name}**\n"
-            result += f"   - File ID: `{file.name}`\n"
-            result += f"   - State: {file.state}\n"
-            if hasattr(file, 'create_time'):
-                result += f"   - Uploaded: {file.create_time}\n"
+        for i, doc in enumerate(doc_list, 1):
+            display_name = getattr(doc, 'display_name', 'Unknown')
+            size_bytes = int(getattr(doc, 'size_bytes', 0))
+            size_mb = size_bytes / (1024 * 1024)
+
+            result += f"{i}. **{display_name}**\n"
+            result += f"   - Document ID: `{doc.name}`\n"
+            result += f"   - Size: {size_mb:.2f} MB ({size_bytes:,} bytes)\n"
+            if hasattr(doc, 'state'):
+                result += f"   - State: {doc.state}\n"
+            if hasattr(doc, 'create_time'):
+                result += f"   - Uploaded: {doc.create_time}\n"
             result += "\n"
 
-        result += f"\n**Total papers: {len(files_list.files)}**\n"
-        result += f"**Store: {store_name}**"
+        result += "---\n\n"
+        result += "## 📈 Indexing Statistics\n\n"
+        result += f"- **Total Papers**: {len(doc_list)}\n"
+        result += f"- **Total Size**: {total_mb:.2f} MB ({total_bytes:,} bytes)\n"
+        result += f"- **Estimated Tokens**: ~{estimated_tokens:,}\n"
+        result += f"- **Estimated Indexing Cost**: ~${estimated_cost:.4f}\n\n"
+        result += f"**Store**: `{store_name}`"
 
         return [mcp_types.TextContent(
             type="text",
