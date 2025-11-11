@@ -239,31 +239,27 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
         logger.info(f"Uploading {file_path.name} to file search store...")
 
         # Upload file to the file search store
-        upload_response = client.file_search_stores.upload_to_file_search_store(
+        operation = client.file_search_stores.upload_to_file_search_store(
+            file=str(file_path),
             file_search_store_name=store_name,
-            file=str(file_path)
+            config={
+                'display_name': file_path.name,
+            }
         )
-
-        # Get operation name (handle both string and object responses)
-        if isinstance(upload_response, str):
-            op_name = upload_response
-        else:
-            op_name = upload_response.name if hasattr(upload_response, 'name') else str(upload_response)
 
         # Wait for upload to complete
         logger.info("Waiting for upload and indexing to complete...")
         max_wait = 300  # 5 minutes max
         start_time = time.time()
 
-        operation = client.operations.get(op_name)
         while not operation.done:
             if time.time() - start_time > max_wait:
                 return [mcp_types.TextContent(
                     type="text",
                     text="Error: Upload timed out after 5 minutes"
                 )]
-            time.sleep(2)
-            operation = client.operations.get(op_name)
+            time.sleep(5)
+            operation = client.operations.get(operation)
 
         logger.info(f"Successfully uploaded and indexed {file_path.name}")
 
