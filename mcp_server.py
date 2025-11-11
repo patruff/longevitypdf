@@ -298,34 +298,61 @@ async def query_longevity_papers(arguments: dict[str, Any]) -> list[mcp_types.Te
 
         logger.info(f"Querying papers with: {query}")
 
-        # Generate content with file search
-        # Use the file_search tool by passing it directly in tools config
+        # First, get list of documents in the store
+        docs_response = client.file_search_stores.documents.list(parent=store_name)
+
+        if not docs_response or not hasattr(docs_response, 'documents') or not docs_response.documents:
+            return [mcp_types.TextContent(
+                type="text",
+                text="No documents found in store. Please upload papers first using 'upload_longevity_paper'."
+            )]
+
+        # Query each document and collect relevant chunks
+        all_chunks = []
+        citations = []
+
+        for doc in docs_response.documents:
+            try:
+                # Query this document for relevant chunks
+                query_response = client.file_search_stores.documents.query(
+                    name=doc.name,
+                    body={'query': query, 'results_count': 5}
+                )
+
+                if hasattr(query_response, 'relevant_chunks'):
+                    for chunk in query_response.relevant_chunks:
+                        all_chunks.append(chunk.chunk_text if hasattr(chunk, 'chunk_text') else str(chunk))
+                        citations.append({
+                            "title": getattr(doc, 'display_name', 'Unknown'),
+                            "doc_id": doc.name
+                        })
+            except Exception as e:
+                logger.warning(f"Error querying document {doc.name}: {e}")
+                continue
+
+        if not all_chunks:
+            return [mcp_types.TextContent(
+                type="text",
+                text="No relevant information found in the documents for your query."
+            )]
+
+        # Now use the chunks as context for generation
+        context = "\n\n".join(all_chunks[:10])  # Limit to top 10 chunks
+        prompt = f"""Based on the following research paper excerpts, please answer this question: {query}
+
+Research excerpts:
+{context}
+
+Please provide a comprehensive answer based on the above excerpts."""
+
+        # Generate answer using the context
         response = client.models.generate_content(
             model=model,
-            contents=query,
-            config=types.GenerateContentConfig(
-                tools=[{
-                    'file_search': {
-                        'file_search_store_names': [store_name]
-                    }
-                }]
-            )
+            contents=prompt
         )
 
         # Extract answer
         answer = response.text
-
-        # Extract citations
-        citations = []
-        if response.candidates and len(response.candidates) > 0:
-            grounding = response.candidates[0].grounding_metadata
-            if grounding and grounding.grounding_chunks:
-                for chunk in grounding.grounding_chunks:
-                    if chunk.retrieved_context:
-                        citations.append({
-                            "title": chunk.retrieved_context.title,
-                            "uri": getattr(chunk.retrieved_context, 'uri', 'N/A')
-                        })
 
         # Format response
         result_text = f"## Answer\n\n{answer}\n\n"
