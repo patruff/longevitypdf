@@ -110,10 +110,6 @@ async def handle_list_tools() -> list[mcp_types.Tool]:
                     "file_path": {
                         "type": "string",
                         "description": "Path to the PDF file to upload"
-                    },
-                    "display_name": {
-                        "type": "string",
-                        "description": "Optional display name for the file (defaults to filename)"
                     }
                 },
                 "required": ["file_path"]
@@ -215,7 +211,6 @@ async def handle_call_tool(
 async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.TextContent]:
     """Upload a PDF to the file search store."""
     file_path = arguments.get("file_path")
-    display_name = arguments.get("display_name")
 
     if not file_path:
         return [mcp_types.TextContent(
@@ -246,8 +241,7 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
         # Upload file to the file search store
         upload_op = client.file_search_stores.upload_to_file_search_store(
             file_search_store_name=store_name,
-            file=str(file_path),
-            display_name=display_name or file_path.name
+            file=str(file_path)
         )
 
         # Wait for upload to complete
@@ -271,8 +265,7 @@ async def upload_longevity_paper(arguments: dict[str, Any]) -> list[mcp_types.Te
             text=(
                 f"✅ Successfully uploaded and indexed: {file_path.name}\n\n"
                 f"The paper is now searchable in the RAG system.\n"
-                f"Store: {store_name}\n"
-                f"Display name: {display_name or file_path.name}\n\n"
+                f"Store: {store_name}\n\n"
                 f"You can now query it using the 'query_longevity_papers' tool!"
             )
         )]

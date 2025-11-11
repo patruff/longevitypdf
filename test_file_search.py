@@ -55,7 +55,7 @@ def get_or_create_store(client):
     return store_name
 
 
-def upload_pdf(client, store_name, file_path, display_name=None):
+def upload_pdf(client, store_name, file_path):
     """Upload a PDF to the file search store."""
     file_path = Path(file_path).resolve()
 
@@ -70,8 +70,7 @@ def upload_pdf(client, store_name, file_path, display_name=None):
     # Upload file to the file search store
     upload_op = client.file_search_stores.upload_to_file_search_store(
         file_search_store_name=store_name,
-        file=str(file_path),
-        display_name=display_name or file_path.name
+        file=str(file_path)
     )
 
     # Wait for upload to complete
@@ -88,7 +87,6 @@ def upload_pdf(client, store_name, file_path, display_name=None):
         print(f"  ⏱️  {elapsed}s elapsed...", end='\r')
 
     print(f"\n✅ Successfully uploaded and indexed: {file_path.name}")
-    print(f"   Display name: {display_name or file_path.name}")
 
     return upload_op
 
