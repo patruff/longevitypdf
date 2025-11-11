@@ -300,16 +300,17 @@ async def query_longevity_papers(arguments: dict[str, Any]) -> list[mcp_types.Te
         logger.info(f"Querying papers with: {query}")
 
         # Use the file search store as a tool in generation call
+        # Use dict format for better compatibility
         response = client.models.generate_content(
             model=model,
             contents=query,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(
-                    file_search=types.FileSearch(
-                        file_search_store_names=[store_name]
-                    )
-                )]
-            )
+            config={
+                'tools': [{
+                    'file_search': {
+                        'file_search_store_names': [store_name]
+                    }
+                }]
+            }
         )
 
         # Extract answer

@@ -165,16 +165,17 @@ def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
     # Use the file search store as a tool in generation call
     print("\n🔍 DEBUG - Making generate_content call...")
     try:
+        # Use dict format for better compatibility
         response = client.models.generate_content(
             model=model,
             contents=query,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(
-                    file_search=types.FileSearch(
-                        file_search_store_names=[store_name]
-                    )
-                )]
-            )
+            config={
+                'tools': [{
+                    'file_search': {
+                        'file_search_store_names': [store_name]
+                    }
+                }]
+            }
         )
         print("   ✅ generate_content call succeeded")
     except Exception as e:
