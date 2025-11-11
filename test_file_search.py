@@ -88,9 +88,44 @@ def upload_pdf(client, store_name, file_path):
 
     print(f"\n✅ Successfully uploaded and indexed: {file_path.name}")
 
+    # Debug: Print operation result
+    print("\n🔍 DEBUG - Upload Operation Result:")
+    print(f"   Operation name: {operation.name}")
+    print(f"   Operation done: {operation.done}")
+    if hasattr(operation, 'response'):
+        print(f"   Operation response: {operation.response}")
+    if hasattr(operation, 'metadata'):
+        print(f"   Operation metadata: {operation.metadata}")
+
+    # Try to list documents immediately after upload
+    print("\n🔍 DEBUG - Attempting to list documents immediately after upload:")
+    try:
+        immediate_list = client.file_search_stores.documents.list(parent=store_name)
+        if hasattr(immediate_list, 'documents') and immediate_list.documents:
+            print(f"   ✅ Found {len(list(immediate_list.documents))} document(s) immediately")
+            for doc in immediate_list.documents:
+                print(f"      - Doc: {doc.name}, State: {doc.state if hasattr(doc, 'state') else 'unknown'}")
+        else:
+            print("   ⚠️  No documents found immediately after upload")
+    except Exception as e:
+        print(f"   ❌ Error listing documents: {e}")
+
     # Wait a bit more to ensure documents are fully indexed and available
-    print("⏳ Ensuring documents are available for querying...")
+    print("\n⏳ Waiting 10 seconds for documents to be fully available...")
     time.sleep(10)
+
+    # List documents again after waiting
+    print("\n🔍 DEBUG - Listing documents after 10-second wait:")
+    try:
+        delayed_list = client.file_search_stores.documents.list(parent=store_name)
+        if hasattr(delayed_list, 'documents') and delayed_list.documents:
+            print(f"   ✅ Found {len(list(delayed_list.documents))} document(s) after wait")
+            for doc in delayed_list.documents:
+                print(f"      - Doc: {doc.name}, State: {doc.state if hasattr(doc, 'state') else 'unknown'}")
+        else:
+            print("   ⚠️  Still no documents found after waiting")
+    except Exception as e:
+        print(f"   ❌ Error listing documents: {e}")
 
     return operation
 
@@ -99,34 +134,86 @@ def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
     """Query the papers using RAG with citations."""
     print(f"\n🔍 Query: {query}")
     print(f"   Model: {model}")
+    print(f"   Store: {store_name}")
+
+    # Debug: Check documents before query
+    print("\n🔍 DEBUG - Checking documents before query:")
+    try:
+        pre_query_docs = client.file_search_stores.documents.list(parent=store_name)
+        if hasattr(pre_query_docs, 'documents') and pre_query_docs.documents:
+            doc_list = list(pre_query_docs.documents)
+            print(f"   ✅ Found {len(doc_list)} document(s)")
+            for doc in doc_list:
+                state = doc.state if hasattr(doc, 'state') else 'unknown'
+                print(f"      - {doc.name}: {state}")
+        else:
+            print("   ⚠️  No documents found before query")
+            return "No documents available to query.", []
+    except Exception as e:
+        print(f"   ❌ Error checking documents: {e}")
+        return f"Error checking documents: {e}", []
+
+    # Debug: Show tool configuration
+    print("\n🔍 DEBUG - Tool configuration:")
+    print(f"   file_search_store_names: [{store_name}]")
 
     # Use the file search store as a tool in generation call
-    response = client.models.generate_content(
-        model=model,
-        contents=query,
-        config=types.GenerateContentConfig(
-            tools=[types.Tool(
-                file_search=types.FileSearch(
-                    file_search_store_names=[store_name]
-                )
-            )]
+    print("\n🔍 DEBUG - Making generate_content call...")
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=query,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=[store_name]
+                    )
+                )]
+            )
         )
-    )
+        print("   ✅ generate_content call succeeded")
+    except Exception as e:
+        print(f"   ❌ generate_content call failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Query failed: {e}", []
+
+    # Debug: Print response structure
+    print("\n🔍 DEBUG - Response structure:")
+    print(f"   Has candidates: {hasattr(response, 'candidates') and response.candidates}")
+    if hasattr(response, 'candidates') and response.candidates:
+        print(f"   Number of candidates: {len(response.candidates)}")
+        for i, candidate in enumerate(response.candidates):
+            print(f"   Candidate {i}:")
+            print(f"      - Has content: {hasattr(candidate, 'content')}")
+            print(f"      - Has grounding_metadata: {hasattr(candidate, 'grounding_metadata')}")
+            if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                gm = candidate.grounding_metadata
+                print(f"      - Has grounding_chunks: {hasattr(gm, 'grounding_chunks')}")
+                if hasattr(gm, 'grounding_chunks') and gm.grounding_chunks:
+                    print(f"      - Number of grounding_chunks: {len(gm.grounding_chunks)}")
 
     # Extract answer
     answer = response.text
+    print(f"\n🔍 DEBUG - Extracted answer length: {len(answer)} characters")
 
     # Extract citations from grounding metadata
     citations = []
     if response.candidates and len(response.candidates) > 0:
         grounding = response.candidates[0].grounding_metadata
         if grounding and grounding.grounding_chunks:
-            for chunk in grounding.grounding_chunks:
+            print(f"\n🔍 DEBUG - Processing {len(grounding.grounding_chunks)} grounding chunks")
+            for i, chunk in enumerate(grounding.grounding_chunks):
+                print(f"   Chunk {i}:")
+                print(f"      - Has retrieved_context: {hasattr(chunk, 'retrieved_context')}")
                 if chunk.retrieved_context:
+                    print(f"      - Title: {chunk.retrieved_context.title if hasattr(chunk.retrieved_context, 'title') else 'N/A'}")
                     citations.append({
                         "title": chunk.retrieved_context.title,
                         "uri": getattr(chunk.retrieved_context, 'uri', 'N/A')
                     })
+        else:
+            print("\n🔍 DEBUG - No grounding metadata found")
 
     # Print formatted response
     print("\n" + "="*80)
@@ -153,16 +240,34 @@ def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
 def list_papers(client, store_name):
     """List all indexed papers in the store."""
     print("\n📚 Listing indexed papers...")
+    print(f"   Store: {store_name}")
 
     try:
+        # Debug: Show what we're calling
+        print("\n🔍 DEBUG - Calling documents.list:")
+        print(f"   parent={store_name}")
+
         # List documents in the store using the documents API
         response = client.file_search_stores.documents.list(parent=store_name)
+
+        # Debug: Print response type and attributes
+        print(f"\n🔍 DEBUG - Response type: {type(response)}")
+        print(f"   Has 'documents': {hasattr(response, 'documents')}")
+        if hasattr(response, 'documents'):
+            print(f"   documents is None: {response.documents is None}")
+            if response.documents is not None:
+                try:
+                    doc_list = list(response.documents)
+                    print(f"   documents count: {len(doc_list)}")
+                except Exception as e:
+                    print(f"   Error converting to list: {e}")
 
         if not response or not hasattr(response, 'documents') or not response.documents:
             print("ℹ️  No papers indexed yet")
             return []
 
         doc_list = list(response.documents)
+        print(f"\n🔍 DEBUG - Successfully retrieved {len(doc_list)} document(s)")
 
         # Calculate stats
         total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
