@@ -101,9 +101,11 @@ def upload_pdf(client, store_name, file_path):
     print("\n🔍 DEBUG - Attempting to list documents immediately after upload:")
     try:
         immediate_list = client.file_search_stores.documents.list(parent=store_name)
-        if hasattr(immediate_list, 'documents') and immediate_list.documents:
-            print(f"   ✅ Found {len(list(immediate_list.documents))} document(s) immediately")
-            for doc in immediate_list.documents:
+        # Pager is an iterator - convert to list
+        docs = list(immediate_list)
+        if docs:
+            print(f"   ✅ Found {len(docs)} document(s) immediately")
+            for doc in docs:
                 print(f"      - Doc: {doc.name}, State: {doc.state if hasattr(doc, 'state') else 'unknown'}")
         else:
             print("   ⚠️  No documents found immediately after upload")
@@ -118,9 +120,11 @@ def upload_pdf(client, store_name, file_path):
     print("\n🔍 DEBUG - Listing documents after 10-second wait:")
     try:
         delayed_list = client.file_search_stores.documents.list(parent=store_name)
-        if hasattr(delayed_list, 'documents') and delayed_list.documents:
-            print(f"   ✅ Found {len(list(delayed_list.documents))} document(s) after wait")
-            for doc in delayed_list.documents:
+        # Pager is an iterator - convert to list
+        docs = list(delayed_list)
+        if docs:
+            print(f"   ✅ Found {len(docs)} document(s) after wait")
+            for doc in docs:
                 print(f"      - Doc: {doc.name}, State: {doc.state if hasattr(doc, 'state') else 'unknown'}")
         else:
             print("   ⚠️  Still no documents found after waiting")
@@ -140,8 +144,9 @@ def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
     print("\n🔍 DEBUG - Checking documents before query:")
     try:
         pre_query_docs = client.file_search_stores.documents.list(parent=store_name)
-        if hasattr(pre_query_docs, 'documents') and pre_query_docs.documents:
-            doc_list = list(pre_query_docs.documents)
+        # Pager is an iterator - convert to list
+        doc_list = list(pre_query_docs)
+        if doc_list:
             print(f"   ✅ Found {len(doc_list)} document(s)")
             for doc in doc_list:
                 state = doc.state if hasattr(doc, 'state') else 'unknown'
@@ -252,21 +257,19 @@ def list_papers(client, store_name):
 
         # Debug: Print response type and attributes
         print(f"\n🔍 DEBUG - Response type: {type(response)}")
-        print(f"   Has 'documents': {hasattr(response, 'documents')}")
-        if hasattr(response, 'documents'):
-            print(f"   documents is None: {response.documents is None}")
-            if response.documents is not None:
-                try:
-                    doc_list = list(response.documents)
-                    print(f"   documents count: {len(doc_list)}")
-                except Exception as e:
-                    print(f"   Error converting to list: {e}")
 
-        if not response or not hasattr(response, 'documents') or not response.documents:
+        # Pager is an iterator - convert to list directly
+        try:
+            doc_list = list(response)
+            print(f"   ✅ Successfully converted Pager to list: {len(doc_list)} document(s)")
+        except Exception as e:
+            print(f"   ❌ Error converting Pager to list: {e}")
+            return []
+
+        if not doc_list:
             print("ℹ️  No papers indexed yet")
             return []
 
-        doc_list = list(response.documents)
         print(f"\n🔍 DEBUG - Successfully retrieved {len(doc_list)} document(s)")
 
         # Calculate stats

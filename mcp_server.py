@@ -364,13 +364,14 @@ async def list_indexed_papers(arguments: dict[str, Any]) -> list[mcp_types.TextC
         # List documents in the store using the documents API
         response = client.file_search_stores.documents.list(parent=store_name)
 
-        if not response or not hasattr(response, 'documents') or not response.documents:
+        # Pager is an iterator - convert to list directly
+        doc_list = list(response)
+
+        if not doc_list:
             return [mcp_types.TextContent(
                 type="text",
                 text="No papers indexed yet. Use 'upload_longevity_paper' to add papers."
             )]
-
-        doc_list = list(response.documents)
 
         # Calculate stats
         total_bytes = sum(int(getattr(doc, 'size_bytes', 0)) for doc in doc_list)
