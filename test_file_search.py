@@ -69,11 +69,8 @@ def upload_pdf(client, store_name, file_path):
 
     # Upload file to the file search store
     operation = client.file_search_stores.upload_to_file_search_store(
-        file=str(file_path),
         file_search_store_name=store_name,
-        config={
-            'display_name': file_path.name,
-        }
+        file=str(file_path)
     )
 
     # Wait for upload to complete
@@ -91,6 +88,10 @@ def upload_pdf(client, store_name, file_path):
 
     print(f"\n✅ Successfully uploaded and indexed: {file_path.name}")
 
+    # Wait a bit more to ensure documents are fully indexed and available
+    print("⏳ Ensuring documents are available for querying...")
+    time.sleep(10)
+
     return operation
 
 
@@ -99,57 +100,33 @@ def query_papers(client, store_name, query, model="gemini-2.0-flash-exp"):
     print(f"\n🔍 Query: {query}")
     print(f"   Model: {model}")
 
-    # First, get list of documents in the store
-    docs_response = client.file_search_stores.documents.list(parent=store_name)
-
-    if not docs_response or not hasattr(docs_response, 'documents') or not docs_response.documents:
-        print("⚠️  No documents found in store")
-        return "No documents available to query.", []
-
-    # Query each document and collect relevant chunks
-    all_chunks = []
-    citations = []
-
-    for doc in docs_response.documents:
-        try:
-            # Query this document for relevant chunks
-            query_response = client.file_search_stores.documents.query(
-                name=doc.name,
-                body={'query': query, 'results_count': 5}
-            )
-
-            if hasattr(query_response, 'relevant_chunks'):
-                for chunk in query_response.relevant_chunks:
-                    all_chunks.append(chunk.chunk_text if hasattr(chunk, 'chunk_text') else str(chunk))
-                    citations.append({
-                        "title": getattr(doc, 'display_name', 'Unknown'),
-                        "doc_id": doc.name
-                    })
-        except Exception as e:
-            print(f"⚠️  Error querying document {doc.name}: {e}")
-            continue
-
-    if not all_chunks:
-        print("⚠️  No relevant chunks found")
-        return "No relevant information found in the documents.", []
-
-    # Now use the chunks as context for generation
-    context = "\n\n".join(all_chunks[:10])  # Limit to top 10 chunks
-    prompt = f"""Based on the following research paper excerpts, please answer this question: {query}
-
-Research excerpts:
-{context}
-
-Please provide a comprehensive answer based on the above excerpts."""
-
-    # Generate answer using the context
+    # Use the file search store as a tool in generation call
     response = client.models.generate_content(
         model=model,
-        contents=prompt
+        contents=query,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(
+                file_search=types.FileSearch(
+                    file_search_store_names=[store_name]
+                )
+            )]
+        )
     )
 
     # Extract answer
     answer = response.text
+
+    # Extract citations from grounding metadata
+    citations = []
+    if response.candidates and len(response.candidates) > 0:
+        grounding = response.candidates[0].grounding_metadata
+        if grounding and grounding.grounding_chunks:
+            for chunk in grounding.grounding_chunks:
+                if chunk.retrieved_context:
+                    citations.append({
+                        "title": chunk.retrieved_context.title,
+                        "uri": getattr(chunk.retrieved_context, 'uri', 'N/A')
+                    })
 
     # Print formatted response
     print("\n" + "="*80)
