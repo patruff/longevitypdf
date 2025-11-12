@@ -148,24 +148,62 @@ Ask complex questions that span multiple papers:
 - "Which interventions have been tested in both mice and humans?"
 - "What are the most promising interventions for human longevity based on animal studies?"
 
-## 🔧 Testing & CI/CD
+## 🔧 Automated Sync & Workflows
+
+### Google Drive Integration
+
+The system automatically syncs PDFs from your Google Drive to the RAG system!
+
+#### Setup Google Drive Sync
+
+1. **Create a Service Account:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Enable the Google Drive API
+   - Create a Service Account and download the JSON key file
+
+2. **Share Drive Folder:**
+   - Create a folder named `longevitypapers` in your Google Drive
+   - Share this folder with your service account email (found in the JSON key)
+   - Give it "Viewer" or "Editor" access
+
+3. **Add GitHub Secret:**
+   - Go to your repository Settings → Secrets and variables → Actions
+   - Create a new secret named `GOOGLE_DRIVE_CREDENTIALS`
+   - Paste the entire contents of your service account JSON key file
+   - Also ensure `GOOGLE_GENAI_API_KEY` secret is set
+
+4. **Start Syncing:**
+   - Upload PDFs to your `longevitypapers` folder in Google Drive
+   - The system automatically checks every 6 hours for new PDFs
+   - New PDFs are automatically uploaded to the RAG system
+   - Or manually trigger the sync from the Actions tab
 
 ### GitHub Actions Workflows
 
-The repository includes three workflows for managing your longevity papers:
+The repository includes three workflows:
 
-#### 1. **Upload PDF** (`upload_pdf.yml`)
-Manually upload a PDF from your repository to the File Search store.
+#### 1. **Sync PDFs from Google Drive** (`sync_drive_pdfs.yml`) ⭐ NEW!
+Automatically syncs PDFs from your Google Drive folder to the File Search RAG system.
 
-**How to use:**
-1. Push a PDF file to your repository (anywhere in the repo)
-2. Go to the Actions tab in GitHub
-3. Select "Upload PDF to File Search"
-4. Click "Run workflow"
-5. Enter the path to your PDF (e.g., `paper.pdf` or `papers/my_paper.pdf`)
-6. Click "Run workflow"
+**Runs automatically:**
+- Every 6 hours via scheduled cron job
+- Checks your `longevitypapers` Google Drive folder
+- Downloads any new PDFs
+- Uploads them to File Search
+- Tracks synced files to avoid duplicates
 
-The workflow will upload and index the PDF, making it available for querying.
+**Or run manually:**
+1. Go to the Actions tab in GitHub
+2. Select "Sync PDFs from Google Drive"
+3. Click "Run workflow"
+
+**What it does:**
+- Connects to Google Drive using service account
+- Lists PDFs in the `longevitypapers` folder
+- Compares with previously synced files
+- Downloads and uploads only new PDFs
+- Saves sync state for future runs
 
 #### 2. **Query Longevity Papers** (`query_papers.yml`)
 Ask questions about your indexed papers directly from GitHub Actions.
@@ -198,11 +236,17 @@ This workflow uploads the test PDF, lists all indexed papers, and runs example q
 ### Local Testing
 
 ```bash
+# Test file search locally
 export GOOGLE_GENAI_API_KEY="your_key_here"
 python test_file_search.py
+
+# Test Google Drive sync locally
+export GOOGLE_GENAI_API_KEY="your_key_here"
+export GOOGLE_DRIVE_CREDENTIALS='{"type":"service_account",...}'
+python sync_drive_pdfs.py
 ```
 
-**Note:** All workflows require the `GOOGLE_GENAI_API_KEY` secret to be set in your repository settings.
+**Note:** All workflows require secrets to be set in your repository settings.
 
 ## 🏗️ Architecture
 
@@ -219,7 +263,30 @@ The MCP server uses Google's [File Search Tool](https://ai.google.dev/gemini-api
 
 - **File Search Store**: Created automatically on first use
 - **Config file**: `~/.longevity_papers_mcp/store_config.json`
-- **Persistence**: Store name is saved and reused across sessions
+- **Sync state**: `~/.longevity_papers_mcp/synced_files.json` (tracks Google Drive PDFs)
+- **Persistence**: Store name and sync state are saved and reused across sessions
+
+### Google Drive Sync Process
+
+1. **Every 6 hours** (or manually triggered):
+   - Script connects to Google Drive using service account
+   - Lists all PDFs in the `longevitypapers` folder
+   - Compares with `synced_files.json` to identify new files
+   - Downloads new PDFs to temporary directory
+   - Uploads each new PDF to Google File Search
+   - Updates sync state file with file ID, name, timestamp, and size
+   - Deletes temporary files
+
+2. **Duplicate Prevention**:
+   - Each Google Drive file has a unique ID
+   - Sync state tracks uploaded file IDs
+   - Files are never re-uploaded unless manually removed from sync state
+
+3. **Workflow Benefits**:
+   - Just drop PDFs in your Drive folder - automatic indexing!
+   - No need to commit PDFs to git repository
+   - Works from any device (phone, tablet, computer)
+   - Can share Drive folder with collaborators
 
 ### Pricing
 
@@ -258,13 +325,14 @@ Example output:
 longevitypdf/
 ├── mcp_server.py              # Main MCP server implementation
 ├── test_file_search.py        # Standalone testing script
+├── sync_drive_pdfs.py         # Google Drive sync script
 ├── requirements.txt           # Python dependencies
 ├── .env.example              # Environment variable template
 ├── README.md                 # This file
 ├── vitd_telomere.pdf         # Example research paper
 └── .github/
     └── workflows/
-        ├── upload_pdf.yml        # Manual PDF upload workflow
+        ├── sync_drive_pdfs.yml   # Automated Google Drive sync (every 6 hours)
         ├── query_papers.yml      # Manual query workflow
         └── test_file_search.yml  # Automated testing workflow
 ```

@@ -1,0 +1,51 @@
+name: Sync PDFs from Google Drive
+
+on:
+  # Run automatically every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'  # At minute 0 past every 6th hour
+
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  sync-pdfs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Sync PDFs from Google Drive to File Search
+      env:
+        GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
+        GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
+      run: |
+        echo "🔄 Starting automated PDF sync from Google Drive..."
+        echo "📁 Checking folder: longevitypapers"
+        echo ""
+        python sync_drive_pdfs.py
+
+    - name: Sync completed
+      if: always()
+      run: |
+        echo ""
+        echo "✅ Sync workflow completed!"
+        echo ""
+        echo "📋 What happened:"
+        echo "  - Checked 'longevitypapers' folder in Google Drive"
+        echo "  - Downloaded any new PDFs found"
+        echo "  - Uploaded them to Google File Search RAG system"
+        echo "  - Updated sync state to track processed files"
+        echo ""
+        echo "🔍 To query your papers, use the 'Query Longevity Papers' workflow"
