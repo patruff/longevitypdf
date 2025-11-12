@@ -29,14 +29,18 @@ jobs:
     - name: Upload PDF to File Search Store
       env:
         GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
+        PDF_PATH: ${{ github.event.inputs.pdf_path }}
       run: |
-        echo "📤 Uploading PDF: ${{ github.event.inputs.pdf_path }}"
-        python << 'PYTHON_SCRIPT'
+        echo "📤 Uploading PDF: $PDF_PATH"
+        python -c "
 import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd()))
 from test_file_search import get_client, get_or_create_store, upload_pdf
+
+# Get PDF path from environment variable
+pdf_path = os.environ['PDF_PATH']
 
 # Initialize
 client = get_client()
@@ -44,22 +48,21 @@ store_name = get_or_create_store(client)
 
 print(f'\n📦 Using store: {store_name}\n')
 
-# Upload the PDF
-pdf_path = '${{ github.event.inputs.pdf_path }}'
-
+# Check if PDF exists
 if not Path(pdf_path).exists():
-    print(f"❌ Error: PDF file not found: {pdf_path}")
-    print("\nAvailable PDF files in repository:")
+    print(f'❌ Error: PDF file not found: {pdf_path}')
+    print('\nAvailable PDF files in repository:')
     for pdf in Path('.').rglob('*.pdf'):
-        print(f"  - {pdf}")
+        print(f'  - {pdf}')
     sys.exit(1)
 
+# Upload the PDF
 upload_pdf(client, store_name, pdf_path)
 
-print("\n✅ Upload completed successfully!")
-print(f"📦 Store: {store_name}")
-print("\nYou can now query this paper using the 'Query Longevity Papers' workflow!")
-PYTHON_SCRIPT
+print('\n✅ Upload completed successfully!')
+print(f'📦 Store: {store_name}')
+print('\nYou can now query this paper using the Query Longevity Papers workflow!')
+"
 
     - name: Upload completed
       if: always()
