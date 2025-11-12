@@ -150,14 +150,50 @@ Ask complex questions that span multiple papers:
 
 ## 🔧 Testing & CI/CD
 
-### GitHub Actions Workflow
+### GitHub Actions Workflows
 
-The repository includes a workflow (`test_file_search.yml`) that automatically:
-1. Uploads PDFs to Google File Search
-2. Runs example queries
-3. Shows indexing statistics
+The repository includes three workflows for managing your longevity papers:
 
-Run it manually from the Actions tab or it triggers automatically on PDF changes.
+#### 1. **Upload PDF** (`upload_pdf.yml`)
+Manually upload a PDF from your repository to the File Search store.
+
+**How to use:**
+1. Push a PDF file to your repository (anywhere in the repo)
+2. Go to the Actions tab in GitHub
+3. Select "Upload PDF to File Search"
+4. Click "Run workflow"
+5. Enter the path to your PDF (e.g., `paper.pdf` or `papers/my_paper.pdf`)
+6. Click "Run workflow"
+
+The workflow will upload and index the PDF, making it available for querying.
+
+#### 2. **Query Longevity Papers** (`query_papers.yml`)
+Ask questions about your indexed papers directly from GitHub Actions.
+
+**How to use:**
+1. Go to the Actions tab in GitHub
+2. Select "Query Longevity Papers"
+3. Click "Run workflow"
+4. Enter your question (e.g., "What are the main findings about vitamin D and telomeres?")
+5. Choose a Gemini model (default: gemini-2.0-flash-exp)
+6. Click "Run workflow"
+
+The workflow will query your papers and display the AI-generated answer with citations.
+
+#### 3. **Test File Search** (`test_file_search.yml`)
+Automated testing workflow that runs automatically when PDFs are added or when triggered manually.
+
+**Triggers automatically on:**
+- Push to main or claude/* branches
+- Changes to PDF files
+- Changes to test_file_search.py
+
+**Or run manually:**
+1. Go to the Actions tab
+2. Select "Test Google File Search"
+3. Click "Run workflow"
+
+This workflow uploads the test PDF, lists all indexed papers, and runs example queries.
 
 ### Local Testing
 
@@ -165,6 +201,8 @@ Run it manually from the Actions tab or it triggers automatically on PDF changes
 export GOOGLE_GENAI_API_KEY="your_key_here"
 python test_file_search.py
 ```
+
+**Note:** All workflows require the `GOOGLE_GENAI_API_KEY` secret to be set in your repository settings.
 
 ## 🏗️ Architecture
 
@@ -226,7 +264,9 @@ longevitypdf/
 ├── vitd_telomere.pdf         # Example research paper
 └── .github/
     └── workflows/
-        └── test_file_search.yml  # CI/CD workflow
+        ├── upload_pdf.yml        # Manual PDF upload workflow
+        ├── query_papers.yml      # Manual query workflow
+        └── test_file_search.yml  # Automated testing workflow
 ```
 
 ### Running Standalone (Testing)
