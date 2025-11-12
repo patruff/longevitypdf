@@ -41,7 +41,7 @@ jobs:
       run: |
         echo "🔍 Running query: ${{ github.event.inputs.query }}"
         echo "📊 Using model: ${{ github.event.inputs.model }}"
-        python -c "
+        python << 'PYTHON_SCRIPT'
 import os
 import sys
 from pathlib import Path
@@ -58,8 +58,11 @@ print(f'\n📦 Using store: {store_name}\n')
 query = '''${{ github.event.inputs.query }}'''
 model = '${{ github.event.inputs.model }}'
 
+# query_papers already prints output, just call it
 answer, citations = query_papers(client, store_name, query, model)
-        "
+
+print("\n✅ Query completed successfully!")
+PYTHON_SCRIPT
 
     - name: Query completed
       if: always()

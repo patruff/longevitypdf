@@ -1,0 +1,72 @@
+name: Upload PDF to File Search
+
+on:
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      pdf_path:
+        description: 'Path to PDF file in the repository (e.g., paper.pdf or papers/my_paper.pdf)'
+        required: true
+        default: 'vitd_telomere.pdf'
+
+jobs:
+  upload-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Upload PDF to File Search Store
+      env:
+        GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
+      run: |
+        echo "📤 Uploading PDF: ${{ github.event.inputs.pdf_path }}"
+        python << 'PYTHON_SCRIPT'
+import os
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd()))
+from test_file_search import get_client, get_or_create_store, upload_pdf
+
+# Initialize
+client = get_client()
+store_name = get_or_create_store(client)
+
+print(f'\n📦 Using store: {store_name}\n')
+
+# Upload the PDF
+pdf_path = '${{ github.event.inputs.pdf_path }}'
+
+if not Path(pdf_path).exists():
+    print(f"❌ Error: PDF file not found: {pdf_path}")
+    print("\nAvailable PDF files in repository:")
+    for pdf in Path('.').rglob('*.pdf'):
+        print(f"  - {pdf}")
+    sys.exit(1)
+
+upload_pdf(client, store_name, pdf_path)
+
+print("\n✅ Upload completed successfully!")
+print(f"📦 Store: {store_name}")
+print("\nYou can now query this paper using the 'Query Longevity Papers' workflow!")
+PYTHON_SCRIPT
+
+    - name: Upload completed
+      if: always()
+      run: |
+        echo "✅ Upload workflow completed!"
+        echo "Check the logs above for details."
+        echo ""
+        echo "Next steps:"
+        echo "1. Use the 'Query Longevity Papers' workflow to ask questions"
+        echo "2. Or run queries locally with the MCP server"
