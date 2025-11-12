@@ -38,15 +38,21 @@ jobs:
     - name: Run custom query
       env:
         GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
+        QUERY_TEXT: ${{ github.event.inputs.query }}
+        MODEL_NAME: ${{ github.event.inputs.model }}
       run: |
-        echo "🔍 Running query: ${{ github.event.inputs.query }}"
-        echo "📊 Using model: ${{ github.event.inputs.model }}"
-        python << 'PYTHON_SCRIPT'
+        echo "🔍 Running query: $QUERY_TEXT"
+        echo "📊 Using model: $MODEL_NAME"
+        python -c "
 import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd()))
 from test_file_search import get_client, get_or_create_store, query_papers
+
+# Get inputs from environment variables
+query = os.environ['QUERY_TEXT']
+model = os.environ['MODEL_NAME']
 
 # Initialize
 client = get_client()
@@ -54,15 +60,11 @@ store_name = get_or_create_store(client)
 
 print(f'\n📦 Using store: {store_name}\n')
 
-# Run the query
-query = '''${{ github.event.inputs.query }}'''
-model = '${{ github.event.inputs.model }}'
-
-# query_papers already prints output, just call it
+# Run the query - query_papers already prints output
 answer, citations = query_papers(client, store_name, query, model)
 
-print("\n✅ Query completed successfully!")
-PYTHON_SCRIPT
+print('\n✅ Query completed successfully!')
+"
 
     - name: Query completed
       if: always()
