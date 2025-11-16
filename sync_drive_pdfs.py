@@ -18,7 +18,7 @@ from googleapiclient.http import MediaIoBaseDownload
 import io
 
 # Import our existing file search functions
-from test_file_search import get_client, get_or_create_store, upload_pdf
+from test_file_search import get_client, get_or_create_store, upload_pdf, STORE_DISPLAY_NAME
 
 
 # Configuration
@@ -230,6 +230,7 @@ def sync_pdfs():
     print("=" * 80)
     print(f"✅ Successfully synced: {success_count}/{len(new_files)} PDF(s)")
     print(f"📦 File Search Store: {store_name}")
+    print(f"   Display Name: {STORE_DISPLAY_NAME}")
     print(f"📁 Google Drive Folder: {DRIVE_FOLDER_NAME}")
     print(f"💾 Sync State File: {STATE_FILE}")
     print("=" * 80)

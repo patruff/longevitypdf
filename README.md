@@ -261,7 +261,10 @@ The MCP server uses Google's [File Search Tool](https://ai.google.dev/gemini-api
 
 ### Storage
 
-- **File Search Store**: Created automatically on first use
+- **File Search Store**: Single shared store with display name "longevitypdf"
+  - All PDFs are uploaded to the same store for unified RAG queries
+  - Created automatically on first use if not exists
+  - System searches for existing store by display name before creating new one
 - **Config file**: `~/.longevity_papers_mcp/store_config.json`
 - **Sync state**: `~/.longevity_papers_mcp/synced_files.json` (tracks Google Drive PDFs)
 - **Persistence**: Store name and sync state are saved and reused across sessions

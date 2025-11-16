@@ -24,32 +24,60 @@ def get_client():
     return genai.Client(api_key=api_key)
 
 
+# Constants
+STORE_DISPLAY_NAME = "longevitypdf"
+
+
 def get_or_create_store(client):
-    """Get or create the file search store."""
-    # For GitHub Actions, we'll create a new store each time
-    # In production, you'd want to persist the store name
+    """Get or create the file search store with display name 'longevitypdf'.
+
+    All PDFs should be uploaded to the same store for unified RAG queries.
+    """
     config_path = Path.home() / ".longevity_papers_mcp" / "store_config.json"
 
     store_name = None
+
+    # First, try to load from local config
     if config_path.exists():
         try:
             with open(config_path) as f:
                 config = json.load(f)
                 store_name = config.get("store_name")
-                print(f"📦 Using existing store: {store_name}")
+                print(f"📦 Found local config for store: {store_name}")
         except Exception as e:
             print(f"⚠️  Could not load store config: {e}")
 
+    # If no local config, search for existing store by display name
     if not store_name:
-        print("📦 Creating new file search store...")
-        store = client.file_search_stores.create()
+        print(f"🔍 Searching for existing store with display name '{STORE_DISPLAY_NAME}'...")
+        try:
+            stores = client.file_search_stores.list()
+            for store in stores:
+                if hasattr(store, 'display_name') and store.display_name == STORE_DISPLAY_NAME:
+                    store_name = store.name
+                    print(f"✅ Found existing store: {store_name} (display: {store.display_name})")
+
+                    # Save to local config for future use
+                    config_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(config_path, 'w') as f:
+                        json.dump({"store_name": store_name, "display_name": STORE_DISPLAY_NAME}, f)
+                    print(f"💾 Saved store config to {config_path}")
+                    break
+        except Exception as e:
+            print(f"⚠️  Could not list stores: {e}")
+
+    # Create new store if none exists
+    if not store_name:
+        print(f"📦 Creating new file search store with display name '{STORE_DISPLAY_NAME}'...")
+        store = client.file_search_stores.create(display_name=STORE_DISPLAY_NAME)
         store_name = store.name
         print(f"✅ Created new store: {store_name}")
+        print(f"   Display Name: {STORE_DISPLAY_NAME}")
 
-        # Save store name
+        # Save store name to config
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, 'w') as f:
-            json.dump({"store_name": store_name}, f)
+            json.dump({"store_name": store_name, "display_name": STORE_DISPLAY_NAME}, f)
         print(f"💾 Saved store config to {config_path}")
 
     return store_name
