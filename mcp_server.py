@@ -40,6 +40,9 @@ _client: Optional[genai.Client] = None
 _file_search_store: Optional[Any] = None
 _store_name: Optional[str] = None
 
+# Constants
+STORE_DISPLAY_NAME = "longevitypdf"
+
 
 def get_client() -> genai.Client:
     """Get or create the Google GenAI client."""
@@ -57,34 +60,57 @@ def get_client() -> genai.Client:
 
 
 def get_or_create_store() -> tuple[Any, str]:
-    """Get or create the file search store."""
+    """Get or create the file search store with display name 'longevitypdf'.
+
+    All PDFs should be uploaded to the same store for unified RAG queries.
+    """
     global _file_search_store, _store_name
 
     if _file_search_store is None:
         client = get_client()
-
-        # Try to load store name from config
         config_path = Path.home() / ".longevity_papers_mcp" / "store_config.json"
+
+        # First, try to load from local config
         if config_path.exists():
             try:
                 with open(config_path) as f:
                     config = json.load(f)
                     _store_name = config.get("store_name")
-                    logger.info(f"Loaded existing store name: {_store_name}")
+                    logger.info(f"Loaded existing store name from config: {_store_name}")
             except Exception as e:
                 logger.warning(f"Could not load store config: {e}")
 
+        # If no local config, search for existing store by display name
+        if not _store_name:
+            logger.info(f"Searching for existing store with display name '{STORE_DISPLAY_NAME}'...")
+            try:
+                stores = client.file_search_stores.list()
+                for store in stores:
+                    if hasattr(store, 'display_name') and store.display_name == STORE_DISPLAY_NAME:
+                        _store_name = store.name
+                        logger.info(f"Found existing store: {_store_name} (display: {store.display_name})")
+
+                        # Save to local config for future use
+                        config_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(config_path, 'w') as f:
+                            json.dump({"store_name": _store_name, "display_name": STORE_DISPLAY_NAME}, f)
+                        logger.info(f"Saved store config to {config_path}")
+                        break
+            except Exception as e:
+                logger.warning(f"Could not list stores: {e}")
+
         # Create new store if needed
         if not _store_name:
-            logger.info("Creating new file search store...")
-            _file_search_store = client.file_search_stores.create()
+            logger.info(f"Creating new file search store with display name '{STORE_DISPLAY_NAME}'...")
+            _file_search_store = client.file_search_stores.create(display_name=STORE_DISPLAY_NAME)
             _store_name = _file_search_store.name
             logger.info(f"Created new file search store: {_store_name}")
+            logger.info(f"Display Name: {STORE_DISPLAY_NAME}")
 
             # Save store name
             config_path.parent.mkdir(parents=True, exist_ok=True)
             with open(config_path, 'w') as f:
-                json.dump({"store_name": _store_name}, f)
+                json.dump({"store_name": _store_name, "display_name": STORE_DISPLAY_NAME}, f)
             logger.info(f"Saved store config to {config_path}")
         else:
             # Store exists, we can use it by name
